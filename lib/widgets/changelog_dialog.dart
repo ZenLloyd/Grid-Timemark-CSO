@@ -88,44 +88,30 @@ class _ChangelogDialogState extends State<ChangelogDialog> {
 
     const items = [
       _ChangelogItem(
-        icon: Icons.bolt_rounded,
-        color: Color(0xFFEAB308),
         title: 'Loading Foto Instan',
         description: 'Buka hingga 20 foto dari Galeri HP langsung tampil tanpa lag atau freeze.',
       ),
       _ChangelogItem(
-        icon: Icons.grid_view_rounded,
-        color: Color(0xFF0D9488),
         title: 'Katalog Grid Komplit (1-20 Foto)',
         description: 'Pilihan layout simetris rapi: 3x3 (9 foto), 4x3 & 3x4 (12 foto), 5x3 (15 foto), 4x4, 5x4, dll.',
       ),
       _ChangelogItem(
-        icon: Icons.warning_amber_rounded,
-        color: Color(0xFFF97316),
         title: 'Peringatan Batas 20 Foto',
         description: 'Notifikasi & pop-up otomatis jika foto melebihi kapasitas maksimal 20 foto.',
       ),
       _ChangelogItem(
-        icon: Icons.high_quality_rounded,
-        color: Color(0xFF2563EB),
         title: 'Simpan Galeri Ultra HD (2K)',
         description: 'Bebas bug foto hilang/blank putih. Hasil ekspor tajam dan tidak burik di WhatsApp.',
       ),
       _ChangelogItem(
-        icon: Icons.lock_outline_rounded,
-        color: Color(0xFF10B981),
         title: 'Auto-Lock Saat Edit Foto',
         description: 'Foto lain otomatis terkunci saat Anda sedang zoom atau menggeser 1 foto tertentu.',
       ),
       _ChangelogItem(
-        icon: Icons.font_download_rounded,
-        color: Color(0xFFA855F7),
         title: '10 Pilihan Font Tipografi',
         description: 'Ganti gaya font teks secara real-time (Tegas, Tulisan Tangan, Mesin Tik, dll).',
       ),
       _ChangelogItem(
-        icon: Icons.star_rounded,
-        color: Color(0xFFEC4899),
         title: 'Logo Monogram GT & Splash Screen',
         description: 'Tampilan pembuka elegan dengan signature "Made by ZenLloyd".',
       ),
@@ -154,7 +140,7 @@ class _ChangelogDialogState extends State<ChangelogDialog> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Icon(
-                      Icons.auto_awesome_rounded,
+                      Icons.history_rounded,
                       color: scheme.primary,
                       size: 24,
                     ),
@@ -207,13 +193,13 @@ class _ChangelogDialogState extends State<ChangelogDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
-                          margin: const EdgeInsets.only(top: 2),
-                          padding: const EdgeInsets.all(6),
+                          margin: const EdgeInsets.only(top: 7),
+                          width: 6.5,
+                          height: 6.5,
                           decoration: BoxDecoration(
-                            color: item.color.withValues(alpha: 0.15),
+                            color: scheme.primary,
                             shape: BoxShape.circle,
                           ),
-                          child: Icon(item.icon, size: 16, color: item.color),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -330,14 +316,10 @@ class _ChangelogDialogState extends State<ChangelogDialog> {
 }
 
 class _ChangelogItem {
-  final IconData icon;
-  final Color color;
   final String title;
   final String description;
 
   const _ChangelogItem({
-    required this.icon,
-    required this.color,
     required this.title,
     required this.description,
   });

@@ -144,7 +144,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const Spacer(),
                   IconButton(
-                    icon: const Icon(Icons.auto_awesome_rounded),
+                    icon: const Icon(Icons.info_outline_rounded),
                     tooltip: 'Apa yang Baru?',
                     onPressed: () {
                       showDialog(
@@ -550,3 +550,4 @@ class _MainOptionButton extends StatelessWidget {
     );
   }
 }
+
