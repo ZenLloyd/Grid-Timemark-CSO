@@ -1,0 +1,46 @@
+name: Build iOS (unsigned IPA)
+
+# Menghasilkan IPA TANPA tanda tangan Apple (untuk di-sideload, mis. AltStore / Sideloadly).
+# Foto Mark dikunci ("Segera Hadir") agar sama dengan rilis v1.0.2.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'ios-*'
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze lib
+
+      - name: Test (Foto Mark terkunci)
+        run: flutter test --dart-define=FOTOMARK_ENABLED=false
+
+      - name: Build iOS (no codesign)
+        run: >
+          flutter build ios --release --no-codesign
+          --build-name=1.0.2 --build-number=3
+          --dart-define=FOTOMARK_ENABLED=false
+
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/Runner.app
+          zip -r Grid_TimeMark_iOS_unsigned.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Grid_TimeMark_iOS_unsigned
+          path: Grid_TimeMark_iOS_unsigned.ipa
