@@ -89,15 +89,15 @@ class _ChangelogDialogState extends State<ChangelogDialog> {
     const items = [
       _ChangelogItem(
         title: 'Loading Foto Instan',
-        description: 'Buka hingga 20 foto dari Galeri HP langsung tampil tanpa lag atau freeze.',
+        description: 'Buka hingga 50 foto dari Galeri HP langsung tampil tanpa lag atau freeze.',
       ),
       _ChangelogItem(
-        title: 'Katalog Grid Komplit (1-20 Foto)',
+        title: 'Katalog Grid Komplit (1-50 Foto)',
         description: 'Pilihan layout simetris rapi: 3x3 (9 foto), 4x3 & 3x4 (12 foto), 5x3 (15 foto), 4x4, 5x4, dll.',
       ),
       _ChangelogItem(
-        title: 'Peringatan Batas 20 Foto',
-        description: 'Notifikasi & pop-up otomatis jika foto melebihi kapasitas maksimal 20 foto.',
+        title: 'Peringatan Batas 50 Foto',
+        description: 'Notifikasi & pop-up otomatis jika foto melebihi kapasitas maksimal 50 foto.',
       ),
       _ChangelogItem(
         title: 'Simpan Galeri Ultra HD (2K)',

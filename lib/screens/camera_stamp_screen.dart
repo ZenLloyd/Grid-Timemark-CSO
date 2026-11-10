@@ -11,6 +11,7 @@ import 'package:latlong2/latlong.dart';
 import '../main.dart';
 import '../services/image_export_service.dart';
 import '../services/location_service.dart';
+import '../services/app_settings_service.dart';
 import '../services/photo_code_service.dart';
 
 /// Model Catatan Tambahan ("Judul" & "Konten" persis video Timemark)
@@ -188,13 +189,90 @@ class _CameraStampScreenState extends State<CameraStampScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _loadSettings();
     _startLiveClock();
     _initCamera(_selectedCameraIndex);
     _refreshLiveGpsLocation();
   }
 
+  Future<void> _loadSettings() async {
+    final s = await AppSettingsService.loadTimemarkSettings();
+    if (!mounted) return;
+    setState(() {
+      _activeTemplateId = s.activeTemplateId;
+      _accentColor = Color(s.accentColorValue);
+      _showLogo = s.showLogo;
+      if (s.logoPath != null && File(s.logoPath!).existsSync()) {
+        _logoFile = File(s.logoPath!);
+      }
+      _showCompany = s.showCompany;
+      _companyName = s.companyName;
+      _showOfficerName = s.showOfficerName;
+      _officerName = s.officerName;
+      _showBusinessCard = s.showBusinessCard;
+      _businessCardRole = s.businessCardRole;
+      _showTime = s.showTime;
+      _showAddress = s.showAddress;
+      _showMiniMap = s.showMiniMap;
+      _showCoordinates = s.showCoordinates;
+      _showAltitude = s.showAltitude;
+      _showStyledNote = s.showStyledNote;
+      _styledNoteText = s.styledNoteText;
+      _showTag = s.showTag;
+      _tagText = s.tagText;
+      _showVerifyCode = s.showVerifyCode;
+      _showCustomNotes = s.showCustomNotes;
+      _customNotes.clear();
+      for (final m in s.customNotes) {
+        _customNotes.add(TimemarkNoteItem(
+          title: m['title'] ?? '',
+          content: m['content'] ?? '',
+        ));
+      }
+      _showGrid3x3 = s.showGrid3x3;
+      _showSideVerifyCode = s.showSideVerifyCode;
+      _bottomMode = TimemarkBottomMode.values.firstWhere(
+        (m) => m.name == s.bottomModeName,
+        orElse: () => TimemarkBottomMode.foto,
+      );
+    });
+  }
+
+  void _saveSettings() {
+    AppSettingsService.saveTimemarkSettings(TimemarkSettingsData(
+      activeTemplateId: _activeTemplateId,
+      accentColorValue: _accentColor.toARGB32(),
+      showLogo: _showLogo,
+      logoPath: _logoFile?.path,
+      showCompany: _showCompany,
+      companyName: _companyName,
+      showOfficerName: _showOfficerName,
+      officerName: _officerName,
+      showBusinessCard: _showBusinessCard,
+      businessCardRole: _businessCardRole,
+      showTime: _showTime,
+      showAddress: _showAddress,
+      showMiniMap: _showMiniMap,
+      showCoordinates: _showCoordinates,
+      showAltitude: _showAltitude,
+      showStyledNote: _showStyledNote,
+      styledNoteText: _styledNoteText,
+      showTag: _showTag,
+      tagText: _tagText,
+      showVerifyCode: _showVerifyCode,
+      showCustomNotes: _showCustomNotes,
+      customNotes: _customNotes
+          .map((n) => {'title': n.title, 'content': n.content})
+          .toList(),
+      showGrid3x3: _showGrid3x3,
+      showSideVerifyCode: _showSideVerifyCode,
+      bottomModeName: _bottomMode.name,
+    ));
+  }
+
   @override
   void dispose() {
+    _saveSettings();
     WidgetsBinding.instance.removeObserver(this);
     _clockTimer?.cancel();
     _cameraController?.dispose();
@@ -1540,7 +1618,7 @@ class _CameraStampScreenState extends State<CameraStampScreen>
   Widget _buildBottomModeTab(TimemarkBottomMode mode, String label) {
     final active = _bottomMode == mode;
     return GestureDetector(
-      onTap: () => setState(() => _bottomMode = mode),
+      onTap: () { setState(() => _bottomMode = mode); _saveSettings(); },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         decoration: BoxDecoration(
@@ -1656,7 +1734,7 @@ class _CameraStampScreenState extends State<CameraStampScreen>
                   ),
                 ),
                 value: _showGrid3x3,
-                onChanged: (v) => setState(() => _showGrid3x3 = v),
+                onChanged: (v) { setState(() => _showGrid3x3 = v); _saveSettings(); },
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
@@ -1669,7 +1747,7 @@ class _CameraStampScreenState extends State<CameraStampScreen>
                   ),
                 ),
                 value: _showSideVerifyCode,
-                onChanged: (v) => setState(() => _showSideVerifyCode = v),
+                onChanged: (v) { setState(() => _showSideVerifyCode = v); _saveSettings(); },
               ),
             ],
           ),
@@ -1695,9 +1773,12 @@ class _CameraStampScreenState extends State<CameraStampScreen>
             void updateBoth(VoidCallback fn) {
               setState(fn);
               setModalState(() {});
+              _saveSettings();
             }
 
-            return DraggableScrollableSheet(
+            return Theme(
+              data: ThemeData.light(useMaterial3: true),
+              child: DraggableScrollableSheet(
               expand: false,
               initialChildSize: 0.72,
               maxChildSize: 0.9,
@@ -1829,6 +1910,7 @@ class _CameraStampScreenState extends State<CameraStampScreen>
                   ],
                 );
               },
+            ),
             );
           },
         );
@@ -1870,7 +1952,9 @@ class _CameraStampScreenState extends State<CameraStampScreen>
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
-        return Padding(
+        return Theme(
+          data: ThemeData.light(useMaterial3: true),
+          child: Padding(
           padding: EdgeInsets.fromLTRB(
               16, 16, 16, MediaQuery.of(ctx).viewInsets.bottom + 16),
           child: SingleChildScrollView(
@@ -1958,22 +2042,27 @@ class _CameraStampScreenState extends State<CameraStampScreen>
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx),
+                    onPressed: () {
+                      _saveSettings();
+                      Navigator.pop(ctx);
+                    },
                     child: const Text('Selesai'),
                   ),
                 ),
               ],
             ),
           ),
+        ),
         );
       },
-    );
+    ).whenComplete(_saveSettings);
   }
 
   Future<void> _pickLogo() async {
     final picked = await _picker.pickImage(source: ImageSource.gallery);
     if (picked == null || !mounted) return;
     setState(() => _logoFile = File(picked.path));
+    _saveSettings();
   }
 
   /// Alamat: ambil ulang dari GPS atau ketik manual bila GPS tidak akurat
@@ -1989,7 +2078,9 @@ class _CameraStampScreenState extends State<CameraStampScreen>
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
-        return Padding(
+        return Theme(
+          data: ThemeData.light(useMaterial3: true),
+          child: Padding(
           padding: EdgeInsets.fromLTRB(
               16, 16, 16, MediaQuery.of(ctx).viewInsets.bottom + 16),
           child: Column(
@@ -2046,6 +2137,7 @@ class _CameraStampScreenState extends State<CameraStampScreen>
               ),
             ],
           ),
+        ),
         );
       },
     );
@@ -2091,7 +2183,9 @@ class _CameraStampScreenState extends State<CameraStampScreen>
           }
 
           final r = result;
-          return Padding(
+          return Theme(
+            data: ThemeData.light(useMaterial3: true),
+            child: Padding(
             padding: EdgeInsets.fromLTRB(
                 16, 16, 16, MediaQuery.of(ctx).viewInsets.bottom + 16),
             child: SingleChildScrollView(
@@ -2163,23 +2257,30 @@ class _CameraStampScreenState extends State<CameraStampScreen>
                           const SizedBox(height: 6),
                           Text('Kode: ${r.code}',
                               style: const TextStyle(
-                                  fontSize: 12, fontFamily: 'monospace')),
+                                  fontSize: 12,
+                                  fontFamily: 'monospace',
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF064E3B))),
                           Text(
                               'Waktu: ${DateFormat('dd MMM yyyy HH:mm:ss', 'id_ID').format(r.capturedAt)}',
-                              style: const TextStyle(fontSize: 12)),
+                              style: const TextStyle(
+                                  fontSize: 12, color: Color(0xFF0F172A))),
                           if (r.latitude != null && r.longitude != null)
                             Text(
                                 'Koordinat: ${r.latitude!.toStringAsFixed(6)}, ${r.longitude!.toStringAsFixed(6)}',
-                                style: const TextStyle(fontSize: 12)),
+                                style: const TextStyle(
+                                    fontSize: 12, color: Color(0xFF0F172A))),
                           if (r.address.isNotEmpty)
                             Text('Alamat: ${r.address}',
-                                style: const TextStyle(fontSize: 12)),
+                                style: const TextStyle(
+                                    fontSize: 12, color: Color(0xFF0F172A))),
                         ],
                       ),
                     ),
                 ],
               ),
             ),
+          ),
           );
         });
       },
@@ -2213,6 +2314,7 @@ class _CameraStampScreenState extends State<CameraStampScreen>
                   _activeTemplateId = tpl.id;
                   _accentColor = tpl.accentColor;
                 });
+                _saveSettings();
                 Navigator.pop(ctx);
               },
               child: Container(

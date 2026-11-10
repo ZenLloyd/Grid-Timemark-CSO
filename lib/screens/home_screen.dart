@@ -281,7 +281,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       ),
                                       alignment: Alignment.center,
                                       child: const Text(
-                                        'MAX 20 FOTO',
+                                        'MAX 50 FOTO',
                                         style: TextStyle(
                                           color: Colors.white,
                                           fontSize: 9.5,
@@ -368,7 +368,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Expanded(
                     child: _MainOptionButton(
                       title: 'Grid',
-                      subtitle: 'Kolase 1–20 Foto',
+                      subtitle: 'Kolase 1–50 Foto',
                       icon: Icons.space_dashboard_rounded,
                       gradientColors: const [
                         Color(0xFF10B981), // Hijau Emerald Teal

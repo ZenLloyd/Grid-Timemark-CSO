@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../services/app_settings_service.dart';
 import '../services/image_export_service.dart';
 import '../widgets/theme_toggle_button.dart';
 
@@ -452,7 +454,7 @@ const List<AspectRatioOption> kAspectRatios = [
   AspectRatioOption('A4', 1 / 1.414),
 ];
 
-/// Generator 10+ Variasi Tata Letak (Wireframe Grid) Berdasarkan Jumlah Foto (1 s.d. 20 Foto)
+/// Generator 10+ Variasi Tata Letak (Wireframe Grid) Berdasarkan Jumlah Foto (1 s.d. 50 Foto)
 class GridTemplateCatalog {
   static List<GridTemplateSpec> forPhotoCount(int count) {
     if (count <= 0) return const [];
@@ -660,12 +662,49 @@ class GridTemplateCatalog {
         ];
 
       default:
-        const int cols = 5;
-        final rows = _distributeIntoRows(count, maxPerRow: cols, fullTopFirst: true);
+        final int sqrtRows = math.sqrt(count).round().clamp(3, 8);
+        final int tallerRows = (sqrtRows + 1).clamp(4, 10);
+        final int widerRows = (sqrtRows - 1).clamp(3, 7);
+        final rowsBalanced = _evenDistribute(count, sqrtRows, topHeavy: true);
+        final rowsBottom = _evenDistribute(count, sqrtRows, topHeavy: false);
+        final rowsTall = _evenDistribute(count, tallerRows, topHeavy: true);
+        final rowsWide = _evenDistribute(count, widerRows, topHeavy: true);
         return [
-          _createRowGridSpec(id: '${count}_auto', name: 'Grid Otomatis', rowCounts: rows),
+          _createRowGridSpec(
+            id: '${count}_balanced',
+            name: 'Seimbang ($sqrtRows Baris)',
+            rowCounts: rowsBalanced,
+          ),
+          _createRowGridSpec(
+            id: '${count}_pyramid',
+            name: 'Rapi ($sqrtRows Baris B)',
+            rowCounts: rowsBottom,
+          ),
+          _createRowGridSpec(
+            id: '${count}_tall',
+            name: 'Rapat ($tallerRows Baris)',
+            rowCounts: rowsTall,
+          ),
+          _createRowGridSpec(
+            id: '${count}_wide',
+            name: 'Lebar ($widerRows Baris)',
+            rowCounts: rowsWide,
+          ),
         ];
     }
+  }
+
+  static List<int> _evenDistribute(int total, int numRows, {bool topHeavy = true}) {
+    final int base = total ~/ numRows;
+    final int rem = total % numRows;
+    final List<int> rows = List.generate(numRows, (i) {
+      if (topHeavy) {
+        return i < rem ? base + 1 : base;
+      } else {
+        return i >= (numRows - rem) ? base + 1 : base;
+      }
+    });
+    return rows.where((r) => r > 0).toList();
   }
 
   static GridTemplateSpec _createRowGridSpec({
@@ -721,33 +760,6 @@ class GridTemplateCatalog {
     return groups;
   }
 
-  static List<int> _distributeIntoRows(
-    int total, {
-    required int maxPerRow,
-    required bool fullTopFirst,
-  }) {
-    if (total <= 0) return const [];
-    const validDivisors = [1, 2, 3, 4, 5, 6];
-    final safeMax = validDivisors.contains(maxPerRow) ? maxPerRow : 4;
-
-    final List<int> rows = [];
-    int remaining = total;
-    while (remaining > 0) {
-      if (remaining >= safeMax) {
-        rows.add(safeMax);
-        remaining -= safeMax;
-      } else {
-        rows.add(remaining);
-        remaining = 0;
-      }
-    }
-
-    if (!fullTopFirst && rows.length > 1) {
-      return rows.reversed.toList();
-    }
-    return rows;
-  }
-
   static List<GridCellSpan> _buildRowCells(
     List<int> rowCounts, {
     required double rowHeight,
@@ -790,7 +802,7 @@ class GridScreen extends StatefulWidget {
 }
 
 class _GridScreenState extends State<GridScreen> {
-  static const int maxPhotos = 20;
+  static const int maxPhotos = 50;
 
   final ImagePicker _picker = ImagePicker();
   final GlobalKey _gridBoundaryKey = GlobalKey();
@@ -801,11 +813,40 @@ class _GridScreenState extends State<GridScreen> {
   @override
   void initState() {
     super.initState();
+    _loadGridSettings();
     if (widget.autoOpenPicker && _photos.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _pickImagesFromDevice();
       });
     }
+  }
+
+  Future<void> _loadGridSettings() async {
+    final s = await AppSettingsService.loadGridSettings();
+    if (!mounted) return;
+    setState(() {
+      _selectedRatioIndex = s.selectedRatioIndex.clamp(0, kAspectRatios.length - 1);
+      _outerMargin = s.outerMargin;
+      _innerSpacing = s.innerSpacing;
+      _cornerRadius = s.cornerRadius;
+      _borderWidth = s.borderWidth;
+      _borderColor = Color(s.borderColorValue);
+      _backgroundColor = Color(s.backgroundColorValue);
+      _isTransparentPngBg = s.isTransparentPngBg;
+    });
+  }
+
+  void _saveGridSettings() {
+    AppSettingsService.saveGridSettings(GridSettingsData(
+      selectedRatioIndex: _selectedRatioIndex,
+      outerMargin: _outerMargin,
+      innerSpacing: _innerSpacing,
+      cornerRadius: _cornerRadius,
+      borderWidth: _borderWidth,
+      borderColorValue: _borderColor.toARGB32(),
+      backgroundColorValue: _backgroundColor.toARGB32(),
+      isTransparentPngBg: _isTransparentPngBg,
+    ));
   }
 
   // Mode Layar: true = Layar Pilih Foto (Tray Bawah seperti di video 00:01-00:09), false = Layar Editor Kolase
@@ -1106,6 +1147,7 @@ class _GridScreenState extends State<GridScreen> {
 
   @override
   void dispose() {
+    _saveGridSettings();
     _textInputController.dispose();
     for (final entry in _photos) {
       entry.dispose();
@@ -1136,7 +1178,7 @@ class _GridScreenState extends State<GridScreen> {
             const SizedBox(width: 12),
             const Expanded(
               child: Text(
-                'Maksimal 20 Foto',
+                'Maksimal 50 Foto',
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
               ),
             ),
@@ -1685,7 +1727,7 @@ class _GridScreenState extends State<GridScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Ketuk tombol "Galeri HP" untuk memilih 1 hingga 20 foto langsung dari penyimpanan HP Anda, atau ambil foto menggunakan Kamera.',
+                            'Ketuk tombol "Galeri HP" untuk memilih 1 hingga 50 foto langsung dari penyimpanan HP Anda, atau ambil foto menggunakan Kamera.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 13,
@@ -1876,7 +1918,7 @@ class _GridScreenState extends State<GridScreen> {
                           ),
                         ),
                         Text(
-                          'Maksimal 20 foto kolase',
+                          'Maksimal 50 foto kolase',
                           style: TextStyle(
                             fontSize: 11,
                             color: scheme.onSurfaceVariant,
@@ -2987,7 +3029,7 @@ class _GridScreenState extends State<GridScreen> {
                         quarterTurns: entry.quarterTurns,
                         child: Image.file(
                           File(entry.file.path),
-                          cacheWidth: _photos.length > 9 ? 1080 : 1440,
+                          cacheWidth: _photos.length > 25 ? 540 : (_photos.length > 9 ? 960 : 1440),
                           filterQuality: FilterQuality.medium,
                         ),
                       ),
@@ -3519,21 +3561,21 @@ class _GridScreenState extends State<GridScreen> {
               label: 'Luar',
               value: _outerMargin,
               max: 45,
-              onChanged: (v) => setState(() => _outerMargin = v),
+              onChanged: (v) { setState(() => _outerMargin = v); _saveGridSettings(); },
             ),
             _MarginSliderRow(
               icon: Icons.grid_view_rounded,
               label: 'Spasi',
               value: _innerSpacing,
               max: 25,
-              onChanged: (v) => setState(() => _innerSpacing = v),
+              onChanged: (v) { setState(() => _innerSpacing = v); _saveGridSettings(); },
             ),
             _MarginSliderRow(
               icon: Icons.rounded_corner_rounded,
               label: 'Sudut',
               value: _cornerRadius,
               max: 28,
-              onChanged: (v) => setState(() => _cornerRadius = v),
+              onChanged: (v) { setState(() => _cornerRadius = v); _saveGridSettings(); },
             ),
           ],
         );
@@ -3548,7 +3590,7 @@ class _GridScreenState extends State<GridScreen> {
             final item = kAspectRatios[index];
             final isSelected = _selectedRatioIndex == index;
             return GestureDetector(
-              onTap: () => setState(() => _selectedRatioIndex = index),
+              onTap: () { setState(() => _selectedRatioIndex = index); _saveGridSettings(); },
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -3607,16 +3649,19 @@ class _GridScreenState extends State<GridScreen> {
                 _ActionButtonChip(
                   icon: Icons.wb_sunny_outlined,
                   label: 'Putih',
-                  onTap: () => setState(() {
-                    _isTransparentPngBg = false;
-                    _backgroundColor = Colors.white;
-                  }),
+                  onTap: () {
+                    setState(() {
+                      _isTransparentPngBg = false;
+                      _backgroundColor = Colors.white;
+                    });
+                    _saveGridSettings();
+                  },
                 ),
                 const SizedBox(width: 8),
                 _ActionButtonChip(
                   icon: Icons.grid_on_rounded,
                   label: 'Png (Transparan)',
-                  onTap: () => setState(() => _isTransparentPngBg = true),
+                  onTap: () { setState(() => _isTransparentPngBg = true); _saveGridSettings(); },
                 ),
               ],
             ),
@@ -3631,10 +3676,13 @@ class _GridScreenState extends State<GridScreen> {
                   final isSelected =
                       !_isTransparentPngBg && _backgroundColor == color;
                   return GestureDetector(
-                    onTap: () => setState(() {
-                      _isTransparentPngBg = false;
-                      _backgroundColor = color;
-                    }),
+                    onTap: () {
+                      setState(() {
+                        _isTransparentPngBg = false;
+                        _backgroundColor = color;
+                      });
+                      _saveGridSettings();
+                    },
                     child: Container(
                       width: 48,
                       height: 48,
@@ -3671,7 +3719,7 @@ class _GridScreenState extends State<GridScreen> {
                   if (index == 0) {
                     final isNone = _borderWidth == 0;
                     return GestureDetector(
-                      onTap: () => setState(() => _borderWidth = 0),
+                      onTap: () { setState(() => _borderWidth = 0); _saveGridSettings(); },
                       child: Container(
                         width: 44,
                         height: 44,
@@ -3700,6 +3748,7 @@ class _GridScreenState extends State<GridScreen> {
                         _borderColor = color;
                         if (_borderWidth == 0) _borderWidth = 4.0;
                       });
+                      _saveGridSettings();
                     },
                     child: Container(
                       width: 44,
@@ -3724,7 +3773,7 @@ class _GridScreenState extends State<GridScreen> {
               label: 'Tebal',
               value: _borderWidth,
               max: 15,
-              onChanged: (v) => setState(() => _borderWidth = v),
+              onChanged: (v) { setState(() => _borderWidth = v); _saveGridSettings(); },
             ),
           ],
         );
