@@ -5,12 +5,14 @@ class LocationSnapshot {
   final double latitude;
   final double longitude;
   final double accuracy;
+  final double altitude;
   final String addressLine;
 
   const LocationSnapshot({
     required this.latitude,
     required this.longitude,
     required this.accuracy,
+    required this.altitude,
     required this.addressLine,
   });
 
@@ -83,6 +85,7 @@ class LocationService {
       latitude: position.latitude,
       longitude: position.longitude,
       accuracy: position.accuracy,
+      altitude: position.altitude,
       addressLine: resolvedAddress,
     );
   }

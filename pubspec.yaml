@@ -1,7 +1,7 @@
 name: grid_and_timemark
 description: Aplikasi Mobile Cross-Platform Photo Grid (hingga 20 foto) & Real-time Timestamp Camera untuk kebutuhan laporan kerja.
 publish_to: 'none'
-version: 1.1.0+4
+version: 1.1.1+5
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -19,6 +19,9 @@ dependencies:
   gal: ^2.3.0
   image: ^4.2.0
   permission_handler: ^11.3.1
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
+  crypto: ^3.0.8
 
 dev_dependencies:
   flutter_test:

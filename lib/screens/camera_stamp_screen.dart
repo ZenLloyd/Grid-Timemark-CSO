@@ -3,12 +3,15 @@ import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../main.dart';
 import '../services/image_export_service.dart';
 import '../services/location_service.dart';
+import '../services/photo_code_service.dart';
 
 /// Model Catatan Tambahan ("Judul" & "Konten" persis video Timemark)
 class TimemarkNoteItem {
@@ -18,21 +21,6 @@ class TimemarkNoteItem {
   const TimemarkNoteItem({
     required this.title,
     required this.content,
-  });
-}
-
-/// Model Alamat Terdekat (Cikini / Taman Ismail Marzuki + GPS Live)
-class NearbyPlaceOption {
-  final String title;
-  final String distance;
-  final String fullAddress;
-  final String coordinates;
-
-  const NearbyPlaceOption({
-    required this.title,
-    required this.distance,
-    required this.fullAddress,
-    required this.coordinates,
   });
 }
 
@@ -87,7 +75,7 @@ const List<TimemarkTemplateSpec> kTimemarkTemplates = [
     name: 'Bersih',
     badge: 'Bersih',
     accentColor: Color(0xFF0EA5E9),
-    description: 'Stempel kebersihan area CSO + Jam + Lokasi',
+    description: 'Stempel kebersihan area + Jam + Lokasi',
   ),
   TimemarkTemplateSpec(
     id: 'report_kunjungan',
@@ -116,44 +104,6 @@ const List<TimemarkTemplateSpec> kTimemarkTemplates = [
     badge: 'Minimalis',
     accentColor: Color(0xFF10B981),
     description: 'Satu baris ringkas: | Tanggal & Jam + Lokasi',
-  ),
-];
-
-const List<NearbyPlaceOption> kDefaultTimNearbyPlaces = [
-  NearbyPlaceOption(
-    title: 'No.8, Jalan Cikini Raya',
-    distance: '0m',
-    fullAddress:
-        'Jl. Cikini Raya No.8, RT.8/RW.2, Cikini,\nKec. Menteng, Kota Jakarta Pusat,\nDaerah Khusus Ibukota Jakarta 10330',
-    coordinates: '-6.189712°, 106.839104° (±4m)',
-  ),
-  NearbyPlaceOption(
-    title: 'Dewan Kesenian Jakarta',
-    distance: '7m',
-    fullAddress:
-        'Taman Ismail Marzuki, Jl. Cikini Raya No. 73,\nCikini, Menteng, Kota Jakarta Pusat,\nDKI Jakarta 10330',
-    coordinates: '-6.189645°, 106.839210° (±5m)',
-  ),
-  NearbyPlaceOption(
-    title: 'Teh Kotjok - TIM 2',
-    distance: '9m',
-    fullAddress:
-        'Gedung Trisno Soemardjo, Roket Planetarium,\nRT.8/RW.2, Cikini, Kec. Menteng,\nKota Jakarta Pusat 10330',
-    coordinates: '-6.189801°, 106.839055° (±5m)',
-  ),
-  NearbyPlaceOption(
-    title: 'Jl. Sekolah Seni No. 11',
-    distance: '10m',
-    fullAddress:
-        'Jl. Sekolah Seni No. 11, Cikini, Menteng,\nKota Jakarta Pusat, DKI Jakarta 10330',
-    coordinates: '-6.189520°, 106.839380° (±6m)',
-  ),
-  NearbyPlaceOption(
-    title: 'Jalan Cikini Raya no74',
-    distance: '27m',
-    fullAddress:
-        'Jl. Cikini Raya No. 74, Cikini, Menteng,\nKota Jakarta Pusat, DKI Jakarta 10330',
-    coordinates: '-6.189910°, 106.838920° (±8m)',
   ),
 ];
 
@@ -195,37 +145,36 @@ class _CameraStampScreenState extends State<CameraStampScreen>
   String _activeTemplateId = 'waktu_lokasi';
   Color _accentColor = const Color(0xFFF59E0B);
 
+  // Semua isian identitas dikosongkan: sepenuhnya diisi oleh pengguna.
+  // Aplikasi hanya menyediakan data nyata: waktu, lokasi, peta, ketinggian, kode foto.
   bool _showLogo = false;
+  File? _logoFile;
   bool _showCompany = false;
-  String _companyName = 'Taman Ismail Marzuki - CSO';
-  bool _showOfficerName = true;
-  String _officerName = 'Petugas CSO';
+  String _companyName = '';
+  bool _showOfficerName = false;
+  String _officerName = '';
   bool _showBusinessCard = false;
-  final String _businessCardRole = 'CSO • Customer Service Officer';
+  String _businessCardRole = '';
   bool _showTime = true;
   bool _showAddress = true;
   String _addressText = 'Mencari lokasi GPS...';
   bool _showMiniMap = false;
   bool _showCoordinates = false;
   String _coordinatesText = 'Menunggu sinyal GPS...';
-  bool _showWeather = false;
-  final String _weatherText = '29°C Berawan';
+  double? _lat;
+  double? _lon;
   bool _showAltitude = false;
-  final String _altitudeText = '18.4m mdpl';
-  bool _showCompass = false;
-  final String _compassText = '310° NW';
+  String _altitudeText = '';
   bool _showStyledNote = false;
-  String _styledNoteText = 'Inspeksi Kebersihan & Patroli Rutin';
+  String _styledNoteText = '';
   bool _showTag = false;
-  final String _tagText = '#TIM #CSO #LaporanHarian';
+  String _tagText = '';
   bool _showVerifyCode = false;
   bool _showCustomNotes = false;
-  final List<TimemarkNoteItem> _customNotes = const [
-    TimemarkNoteItem(title: 'Catatan', content: 'Area bersih dan kondusif'),
-  ];
+  final List<TimemarkNoteItem> _customNotes = [];
+  String _nextPhotoCode = PhotoCodeService.generateCode();
 
-  // Pengaturan Kamera & Stempel Resmi
-  bool _showCornerTimemarkLogo = true;
+  // Pengaturan Kamera
   bool _showGrid3x3 = false;
   bool _showSideVerifyCode = false;
   final int _timerSeconds = 0; // 0, 3, 5, 10
@@ -267,7 +216,8 @@ class _CameraStampScreenState extends State<CameraStampScreen>
 
   void _startLiveClock() {
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) {
+      // Jangan ubah jam saat proses jepret berlangsung (waktu dibekukan)
+      if (mounted && !_isProcessingCapture) {
         setState(() {
           _now = DateTime.now();
         });
@@ -402,10 +352,15 @@ class _CameraStampScreenState extends State<CameraStampScreen>
       final snapshot = await LocationService.getCurrentLocationSnapshot();
       if (!mounted) return;
       setState(() {
+        _lat = snapshot.latitude;
+        _lon = snapshot.longitude;
         _coordinatesText = snapshot.coordinatesText;
+        _altitudeText = '${snapshot.altitude.toStringAsFixed(0)} m';
         if (snapshot.addressLine.isNotEmpty &&
             snapshot.addressLine != 'Alamat tidak ditemukan') {
           _addressText = snapshot.addressLine;
+        } else {
+          _addressText = 'Alamat tidak ditemukan (koordinat tetap valid)';
         }
       });
     } catch (e) {
@@ -518,9 +473,16 @@ class _CameraStampScreenState extends State<CameraStampScreen>
       );
       return;
     }
+    // Bekukan waktu, lokasi, dan kode TEPAT saat shutter ditekan agar yang
+    // tercetak di foto sama persis dengan yang tersimpan di riwayat.
+    final shutterTime = DateTime.now();
+    final shutterCode = _nextPhotoCode;
+    final shutterLat = _lat;
+    final shutterLon = _lon;
+    final shutterAddress = _addressText;
     setState(() {
       _isProcessingCapture = true;
-      _now = DateTime.now();
+      _now = shutterTime;
     });
 
     try {
@@ -538,18 +500,34 @@ class _CameraStampScreenState extends State<CameraStampScreen>
         });
       }
 
-      await Future.delayed(const Duration(milliseconds: 120));
+      // Beri waktu peta mini memuat tile sebelum diambil gambarnya
+      await Future.delayed(Duration(milliseconds: _showMiniMap ? 900 : 150));
 
       final String savedPath = await ImageExportService.captureAndSaveToGallery(
         boundaryKey: _stampBoundaryKey,
-        filePrefix: 'TIM_CSO_Timemark',
+        filePrefix: 'FotoMark',
         pixelRatio: 3.0,
       );
+
+      // Catat ke riwayat lokal (kode unik per foto + hash berkas)
+      try {
+        await PhotoCodeService.save(PhotoRecord(
+          code: shutterCode,
+          capturedAt: shutterTime,
+          latitude: shutterLat,
+          longitude: shutterLon,
+          address: shutterAddress,
+          fileSha256: await PhotoCodeService.sha256OfFile(savedPath),
+        ));
+      } catch (_) {
+        // Riwayat gagal tersimpan tidak boleh menggagalkan foto
+      }
 
       if (!mounted) return;
       setState(() {
         _capturedStampedPaths.insert(0, savedPath);
         _pickedGalleryBackground = null;
+        _nextPhotoCode = PhotoCodeService.generateCode();
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -641,9 +619,7 @@ class _CameraStampScreenState extends State<CameraStampScreen>
           ),
           // Pill Tengah: Verifikasi Foto
           GestureDetector(
-            onTap: () {
-              setState(() => _showVerifyCode = !_showVerifyCode);
-            },
+            onTap: _openVerifySheet,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
               decoration: BoxDecoration(
@@ -656,7 +632,7 @@ class _CameraStampScreenState extends State<CameraStampScreen>
                       size: 14, color: Color(0xFF334155)),
                   SizedBox(width: 4),
                   Text(
-                    'Verifikasi Foto',
+                    'Verifikasi',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -667,21 +643,38 @@ class _CameraStampScreenState extends State<CameraStampScreen>
               ),
             ),
           ),
-          // Kanan: Badge CSO + Switch Camera
+          // Kanan: Indikator GPS + Switch Camera
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF059669),
-                  borderRadius: BorderRadius.circular(99),
-                ),
-                child: const Text(
-                  'CSO PRO',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white,
+              GestureDetector(
+                onTap: () {
+                  setState(() => _addressText = 'Mencari lokasi GPS...');
+                  _refreshLiveGpsLocation();
+                },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: _lat != null
+                        ? const Color(0xFF059669)
+                        : const Color(0xFFD97706),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.my_location_rounded,
+                          size: 10, color: Colors.white),
+                      const SizedBox(width: 3),
+                      Text(
+                        _lat != null ? 'GPS' : 'GPS...',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -810,8 +803,8 @@ class _CameraStampScreenState extends State<CameraStampScreen>
                       ),
                     ),
                   ),
-                  // Mini Map di Pojok Kiri Atas (Jika Peta atau Mode Absensi aktif)
-                  if (_showMiniMap || _bottomMode == TimemarkBottomMode.absensi)
+                  // Mini Map di Pojok Kiri Atas (peta nyata, hanya jika diaktifkan pengguna)
+                  if (_showMiniMap)
                     Positioned(
                       top: 12,
                       left: 12,
@@ -827,41 +820,7 @@ class _CameraStampScreenState extends State<CameraStampScreen>
                       child: _buildLiveWatermarkContent(),
                     ),
                   ),
-                  // Stempel Resmi Pojok Kanan Bawah (Bisa Dimatikan Gratis!)
-                  if (_showCornerTimemarkLogo)
-                    Positioned(
-                      right: 56,
-                      bottom: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Timemark ',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFFFBBF24),
-                              ),
-                            ),
-                            Text(
-                              '100% Akurat',
-                              style: TextStyle(
-                                fontSize: 8,
-                                color: Colors.white70,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  // Kode Foto Samping Vertikal
+                  // Kode Foto Samping Vertikal (kode nyata, unik per foto)
                   if (_showSideVerifyCode)
                     Positioned(
                       right: 4,
@@ -872,9 +831,9 @@ class _CameraStampScreenState extends State<CameraStampScreen>
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           color: Colors.black45,
-                          child: const Text(
-                            '✔ Kode Foto: 201821YYGGDHLD',
-                            style: TextStyle(
+                          child: Text(
+                            'Kode Foto: $_nextPhotoCode',
+                            style: const TextStyle(
                               fontSize: 9,
                               fontFamily: 'monospace',
                               color: Colors.white70,
@@ -1071,7 +1030,7 @@ class _CameraStampScreenState extends State<CameraStampScreen>
       ),
       child: const Center(
         child: Text(
-          'KAMERA TIMEMARK • CSO TIM',
+          'Memuat Kamera...',
           style: TextStyle(
             color: Colors.white54,
             fontWeight: FontWeight.w800,
@@ -1083,33 +1042,64 @@ class _CameraStampScreenState extends State<CameraStampScreen>
   }
 
   Widget _buildMiniMapOverlay() {
+    final lat = _lat;
+    final lon = _lon;
     return Container(
-      width: 86,
-      height: 86,
+      width: 96,
+      height: 96,
       decoration: BoxDecoration(
         color: const Color(0xFFE2E8F0),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white, width: 2),
       ),
-      child: const Stack(
-        alignment: Alignment.center,
-        children: [
-          Icon(Icons.map_rounded, size: 64, color: Color(0xFFCBD5E1)),
-          Icon(Icons.location_on_rounded, size: 24, color: Color(0xFF2563EB)),
-          Positioned(
-            left: 6,
-            bottom: 4,
-            child: Text(
-              'Google',
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF475569),
+      clipBehavior: Clip.antiAlias,
+      child: (lat == null || lon == null)
+          ? const Center(
+              child: Text(
+                'Menunggu\nGPS...',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 10, color: Color(0xFF475569)),
               ),
+            )
+          : Stack(
+              fit: StackFit.expand,
+              children: [
+                IgnorePointer(
+                  child: FlutterMap(
+                    key: ValueKey('$lat,$lon'),
+                    options: MapOptions(
+                      initialCenter: LatLng(lat, lon),
+                      initialZoom: 17,
+                      interactionOptions:
+                          const InteractionOptions(flags: InteractiveFlag.none),
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'id.tim.csotim',
+                      ),
+                    ],
+                  ),
+                ),
+                const Center(
+                  child: Icon(Icons.location_on_rounded,
+                      size: 28, color: Color(0xFFDC2626)),
+                ),
+                const Positioned(
+                  right: 3,
+                  bottom: 1,
+                  child: Text(
+                    '© OpenStreetMap',
+                    style: TextStyle(
+                      fontSize: 6.5,
+                      color: Color(0xFF334155),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -1161,38 +1151,17 @@ class _CameraStampScreenState extends State<CameraStampScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_showLogo)
+          if (_showLogo && _logoFile != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF059669),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text(
-                      'TIM CSO',
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  const Text(
-                    'Taman Ismail Marzuki',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: Image.file(
+                  _logoFile!,
+                  height: 28,
+                  fit: BoxFit.contain,
+                  cacheHeight: 120,
+                ),
               ),
             ),
 
@@ -1326,15 +1295,11 @@ class _CameraStampScreenState extends State<CameraStampScreen>
               ),
             ),
 
-          if (_showWeather || _showAltitude || _showCompass)
+          if (_showAltitude && _altitudeText.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 2),
               child: Text(
-                [
-                  if (_showWeather) _weatherText,
-                  if (_showAltitude) _altitudeText,
-                  if (_showCompass) _compassText,
-                ].join(' • '),
+                'Ketinggian $_altitudeText',
                 style: const TextStyle(fontSize: 10, color: Colors.white70),
               ),
             ),
@@ -1413,18 +1378,18 @@ class _CameraStampScreenState extends State<CameraStampScreen>
             ),
           ],
 
-          if (_showVerifyCode || _activeTemplateId == 'e_absensi')
-            const Padding(
-              padding: EdgeInsets.only(top: 4),
+          if (_showVerifyCode)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.check_circle_rounded,
+                  const Icon(Icons.check_circle_rounded,
                       size: 12, color: Color(0xFF34D399)),
-                  SizedBox(width: 4),
+                  const SizedBox(width: 4),
                   Text(
-                    'Kode Foto: 201821YYGGDHLD',
-                    style: TextStyle(
+                    'Kode Foto: $_nextPhotoCode',
+                    style: const TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
                       color: Colors.white,
@@ -1615,35 +1580,21 @@ class _CameraStampScreenState extends State<CameraStampScreen>
           ),
           const SizedBox(height: 4),
           const Text(
-            'Catat setiap pekerjaan langkah demi langkah — Taman Ismail Marzuki (CSO)',
+            'Isi sendiri sesuai kebutuhan pekerjaan Anda',
             style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
           ),
           const SizedBox(height: 16),
           Container(
+            width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
-            child: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Pemeriksaan Kualitas Area',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F172A),
-                  ),
-                ),
-                SizedBox(height: 12),
-                Text('✔ Apakah lokasi sudah dibersihkan: Ya',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF334155))),
-                SizedBox(height: 8),
-                Text('✔ Status Peralatan & Fasilitas: Baik',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF334155))),
-              ],
+            child: const Text(
+              'Formulir belum tersedia (Alpha). Untuk sekarang, gunakan kolom Catatan Kustom di Edit Template.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF334155), height: 1.4),
             ),
           ),
         ],
@@ -1664,30 +1615,35 @@ class _CameraStampScreenState extends State<CameraStampScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _officerName,
+                _officerName.isEmpty ? 'Pengaturan' : _officerName,
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
                   color: Color(0xFF0F172A),
                 ),
               ),
-              const Text(
-                'Taman Ismail Marzuki • CSO',
-                style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-              ),
+              if (_companyName.isNotEmpty)
+                Text(
+                  _companyName,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                ),
               const Divider(height: 24),
-              SwitchListTile(
+              ListTile(
                 contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.verified_outlined,
+                    color: Color(0xFF0F172A)),
                 title: const Text(
-                  'Tampilkan logo Timemark',
+                  'Verifikasi Kode Foto',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF1E293B),
                   ),
                 ),
-                value: _showCornerTimemarkLogo,
-                onChanged: (v) => setState(() => _showCornerTimemarkLogo = v),
+                onTap: () {
+                  Navigator.pop(context);
+                  _openVerifySheet();
+                },
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
@@ -1769,25 +1725,49 @@ class _CameraStampScreenState extends State<CameraStampScreen>
                       ],
                     ),
                     SwitchListTile(
-                      title: const Text('Logo Tim (TIM CSO)',
+                      title: const Text('Logo (dari galeri Anda)',
                           style: TextStyle(color: Color(0xFF1E293B))),
+                      subtitle: Text(
+                          _logoFile == null
+                              ? 'Belum ada logo dipilih'
+                              : 'Logo terpasang',
+                          style: const TextStyle(fontSize: 11)),
                       value: _showLogo,
-                      onChanged: (v) => updateBoth(() => _showLogo = v),
+                      onChanged: (v) async {
+                        if (v && _logoFile == null) {
+                          await _pickLogo();
+                          if (_logoFile == null) return;
+                        }
+                        updateBoth(() => _showLogo = v);
+                      },
                     ),
+                    if (_logoFile != null)
+                      ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.image_outlined),
+                        title: const Text('Ganti logo'),
+                        onTap: () async {
+                          await _pickLogo();
+                          updateBoth(() {});
+                        },
+                      ),
                     SwitchListTile(
-                      title: Text('Perusahaan: $_companyName',
+                      title: Text(
+                          'Perusahaan${_companyName.isEmpty ? ' (isi di Edit Cepat)' : ': $_companyName'}',
                           style: const TextStyle(color: Color(0xFF1E293B))),
                       value: _showCompany,
                       onChanged: (v) => updateBoth(() => _showCompany = v),
                     ),
                     SwitchListTile(
-                      title: Text('Nama Petugas: $_officerName',
+                      title: Text(
+                          'Nama${_officerName.isEmpty ? ' (isi di Edit Cepat)' : ': $_officerName'}',
                           style: const TextStyle(color: Color(0xFF1E293B))),
                       value: _showOfficerName,
                       onChanged: (v) => updateBoth(() => _showOfficerName = v),
                     ),
                     SwitchListTile(
-                      title: Text('Kartu Nama: $_businessCardRole',
+                      title: Text(
+                          'Jabatan${_businessCardRole.isEmpty ? ' (isi di Edit Cepat)' : ': $_businessCardRole'}',
                           style: const TextStyle(color: Color(0xFF1E293B))),
                       value: _showBusinessCard,
                       onChanged: (v) => updateBoth(() => _showBusinessCard = v),
@@ -1817,22 +1797,10 @@ class _CameraStampScreenState extends State<CameraStampScreen>
                       onChanged: (v) => updateBoth(() => _showCoordinates = v),
                     ),
                     SwitchListTile(
-                      title: const Text('Cuaca',
-                          style: TextStyle(color: Color(0xFF1E293B))),
-                      value: _showWeather,
-                      onChanged: (v) => updateBoth(() => _showWeather = v),
-                    ),
-                    SwitchListTile(
-                      title: const Text('Ketinggian',
+                      title: const Text('Ketinggian (dari GPS)',
                           style: TextStyle(color: Color(0xFF1E293B))),
                       value: _showAltitude,
                       onChanged: (v) => updateBoth(() => _showAltitude = v),
-                    ),
-                    SwitchListTile(
-                      title: const Text('Kompas',
-                          style: TextStyle(color: Color(0xFF1E293B))),
-                      value: _showCompass,
-                      onChanged: (v) => updateBoth(() => _showCompass = v),
                     ),
                     SwitchListTile(
                       title: const Text('Styled Note',
@@ -1847,7 +1815,7 @@ class _CameraStampScreenState extends State<CameraStampScreen>
                       onChanged: (v) => updateBoth(() => _showTag = v),
                     ),
                     SwitchListTile(
-                      title: const Text('Kode Foto: verifikasi keaslian',
+                      title: const Text('Kode Foto (unik per foto)',
                           style: TextStyle(color: Color(0xFF1E293B))),
                       value: _showVerifyCode,
                       onChanged: (v) => updateBoth(() => _showVerifyCode = v),
@@ -1871,53 +1839,209 @@ class _CameraStampScreenState extends State<CameraStampScreen>
   void _openQuickEditSheet(BuildContext context) {
     final nameCtrl = TextEditingController(text: _officerName);
     final compCtrl = TextEditingController(text: _companyName);
+    final roleCtrl = TextEditingController(text: _businessCardRole);
     final noteCtrl = TextEditingController(text: _styledNoteText);
+    final tagCtrl = TextEditingController(text: _tagText);
+    final noteTitleCtrl = TextEditingController(
+        text: _customNotes.isNotEmpty ? _customNotes.first.title : '');
+    final noteBodyCtrl = TextEditingController(
+        text: _customNotes.isNotEmpty ? _customNotes.first.content : '');
+
+    InputDecoration deco(String label, String hint) =>
+        InputDecoration(labelText: label, hintText: hint);
+    const fieldStyle = TextStyle(color: Color(0xFF0F172A));
+
+    void syncNote() {
+      final t = noteTitleCtrl.text.trim();
+      final b = noteBodyCtrl.text.trim();
+      setState(() {
+        _customNotes.clear();
+        if (t.isNotEmpty || b.isNotEmpty) {
+          _customNotes.add(TimemarkNoteItem(title: t, content: b));
+        }
+      });
+    }
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
         return Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.fromLTRB(
+              16, 16, 16, MediaQuery.of(ctx).viewInsets.bottom + 16),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Edit Cepat',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Semua kolom opsional dan kosong secara default. Nyalakan tampilannya di Edit Template.',
+                  style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: nameCtrl,
+                  style: fieldStyle,
+                  decoration: deco('Nama', 'Nama Anda'),
+                  onChanged: (v) => setState(() {
+                    _officerName = v;
+                    if (v.trim().isNotEmpty) _showOfficerName = true;
+                  }),
+                ),
+                TextField(
+                  controller: compCtrl,
+                  style: fieldStyle,
+                  decoration: deco('Perusahaan / Tim', 'Nama perusahaan atau tim'),
+                  onChanged: (v) => setState(() {
+                    _companyName = v;
+                    if (v.trim().isNotEmpty) _showCompany = true;
+                  }),
+                ),
+                TextField(
+                  controller: roleCtrl,
+                  style: fieldStyle,
+                  decoration: deco('Jabatan', 'Jabatan atau peran'),
+                  onChanged: (v) => setState(() {
+                    _businessCardRole = v;
+                    if (v.trim().isNotEmpty) _showBusinessCard = true;
+                  }),
+                ),
+                TextField(
+                  controller: noteCtrl,
+                  style: fieldStyle,
+                  decoration: deco('Catatan Singkat', 'Tampil sebagai label'),
+                  onChanged: (v) => setState(() {
+                    _styledNoteText = v;
+                    if (v.trim().isNotEmpty) _showStyledNote = true;
+                  }),
+                ),
+                TextField(
+                  controller: tagCtrl,
+                  style: fieldStyle,
+                  decoration: deco('Tag', '#contoh #tag'),
+                  onChanged: (v) => setState(() {
+                    _tagText = v;
+                    if (v.trim().isNotEmpty) _showTag = true;
+                  }),
+                ),
+                TextField(
+                  controller: noteTitleCtrl,
+                  style: fieldStyle,
+                  decoration: deco('Catatan Kustom: Judul', 'mis. Proyek'),
+                  onChanged: (_) {
+                    syncNote();
+                    setState(() => _showCustomNotes = _customNotes.isNotEmpty);
+                  },
+                ),
+                TextField(
+                  controller: noteBodyCtrl,
+                  style: fieldStyle,
+                  decoration: deco('Catatan Kustom: Isi', 'Isi catatan'),
+                  onChanged: (_) {
+                    syncNote();
+                    setState(() => _showCustomNotes = _customNotes.isNotEmpty);
+                  },
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Selesai'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickLogo() async {
+    final picked = await _picker.pickImage(source: ImageSource.gallery);
+    if (picked == null || !mounted) return;
+    setState(() => _logoFile = File(picked.path));
+  }
+
+  /// Alamat: ambil ulang dari GPS atau ketik manual bila GPS tidak akurat
+  /// (mis. di dalam gedung/basement).
+  void _openAddressPickerSheet(BuildContext context) {
+    final addrCtrl = TextEditingController(
+        text: _addressText.startsWith('Mencari') ? '' : _addressText);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+              16, 16, 16, MediaQuery.of(ctx).viewInsets.bottom + 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Edit Cepat',
+                'Lokasi',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
                   color: Color(0xFF0F172A),
                 ),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: nameCtrl,
-                style: const TextStyle(color: Color(0xFF0F172A)),
-                decoration: const InputDecoration(labelText: 'Nama Petugas'),
-                onChanged: (v) => setState(() => _officerName = v),
+              const SizedBox(height: 4),
+              Text(
+                _coordinatesText,
+                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
               ),
-              TextField(
-                controller: compCtrl,
-                style: const TextStyle(color: Color(0xFF0F172A)),
-                decoration: const InputDecoration(labelText: 'Perusahaan / Tim'),
-                onChanged: (v) => setState(() => _companyName = v),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    setState(() => _addressText = 'Mencari lokasi GPS...');
+                    _refreshLiveGpsLocation();
+                  },
+                  icon: const Icon(Icons.my_location_rounded),
+                  label: const Text('Ambil ulang dari GPS'),
+                ),
               ),
+              const SizedBox(height: 10),
               TextField(
-                controller: noteCtrl,
+                controller: addrCtrl,
+                maxLines: 3,
                 style: const TextStyle(color: Color(0xFF0F172A)),
-                decoration: const InputDecoration(labelText: 'Catatan Singkat'),
-                onChanged: (v) => setState(() => _styledNoteText = v),
+                decoration: const InputDecoration(
+                  labelText: 'Ubah alamat manual (opsional)',
+                  hintText: 'Ketik alamat bila GPS kurang akurat',
+                ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Selesai'),
+                  onPressed: () {
+                    final v = addrCtrl.text.trim();
+                    if (v.isNotEmpty) setState(() => _addressText = v);
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('Simpan alamat'),
                 ),
               ),
             ],
@@ -1927,56 +2051,141 @@ class _CameraStampScreenState extends State<CameraStampScreen>
     );
   }
 
-  void _openAddressPickerSheet(BuildContext context) {
+  /// Verifikasi LOKAL: mencocokkan kode / berkas foto dengan riwayat foto
+  /// yang dibuat aplikasi ini di HP ini. Bukan bukti anti-manipulasi bagi
+  /// pihak ketiga (itu butuh server).
+  void _openVerifySheet() {
+    final codeCtrl = TextEditingController();
+    PhotoRecord? result;
+    String? message;
+
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            const Text(
-              'Alamat Terdekat (Taman Ismail Marzuki)',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF0F172A),
-              ),
-            ),
-            const SizedBox(height: 10),
-            ...kDefaultTimNearbyPlaces.map(
-              (place) => ListTile(
-                leading: const Icon(Icons.location_on_rounded,
-                    color: Color(0xFF2563EB)),
-                title: Text(
-                  place.title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF0F172A),
+        return StatefulBuilder(builder: (ctx, setSheet) {
+          Future<void> verifyCode() async {
+            final r = await PhotoCodeService.findByCode(codeCtrl.text);
+            setSheet(() {
+              result = r;
+              message = r == null
+                  ? 'Kode tidak ditemukan di riwayat HP ini.'
+                  : null;
+            });
+          }
+
+          Future<void> verifyFile() async {
+            final picked = await _picker.pickImage(source: ImageSource.gallery);
+            if (picked == null) return;
+            final r = await PhotoCodeService.findByFile(picked.path);
+            setSheet(() {
+              result = r;
+              message = r == null
+                  ? 'Foto tidak cocok dengan riwayat HP ini. Foto yang sudah dikirim lewat WhatsApp berubah (dikompres), cek memakai kodenya.'
+                  : null;
+            });
+          }
+
+          final r = result;
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+                16, 16, 16, MediaQuery.of(ctx).viewInsets.bottom + 16),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Verifikasi Kode Foto',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                    ),
                   ),
-                ),
-                subtitle: Text(
-                  place.fullAddress,
-                  style:
-                      const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                ),
-                onTap: () {
-                  setState(() {
-                    _addressText = place.fullAddress;
-                    _coordinatesText = place.coordinates;
-                  });
-                  Navigator.pop(ctx);
-                },
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Mencocokkan dengan riwayat foto yang dibuat di HP ini saja.',
+                    style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: codeCtrl,
+                    textCapitalization: TextCapitalization.characters,
+                    style: const TextStyle(
+                        color: Color(0xFF0F172A), fontFamily: 'monospace'),
+                    decoration: const InputDecoration(
+                      labelText: 'Kode Foto (14 karakter)',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: verifyCode,
+                          child: const Text('Cek kode'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: verifyFile,
+                          child: const Text('Pilih foto'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (message != null)
+                    Text(message!,
+                        style: const TextStyle(
+                            fontSize: 12, color: Color(0xFFB91C1C))),
+                  if (r != null)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Ditemukan di riwayat HP ini',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF065F46))),
+                          const SizedBox(height: 6),
+                          Text('Kode: ${r.code}',
+                              style: const TextStyle(
+                                  fontSize: 12, fontFamily: 'monospace')),
+                          Text(
+                              'Waktu: ${DateFormat('dd MMM yyyy HH:mm:ss', 'id_ID').format(r.capturedAt)}',
+                              style: const TextStyle(fontSize: 12)),
+                          if (r.latitude != null && r.longitude != null)
+                            Text(
+                                'Koordinat: ${r.latitude!.toStringAsFixed(6)}, ${r.longitude!.toStringAsFixed(6)}',
+                                style: const TextStyle(fontSize: 12)),
+                          if (r.address.isNotEmpty)
+                            Text('Alamat: ${r.address}',
+                                style: const TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                ],
               ),
             ),
-          ],
-        );
+          );
+        });
       },
     );
   }
+
 
   void _openTemplateGallerySheet(BuildContext context) {
     showModalBottomSheet(
