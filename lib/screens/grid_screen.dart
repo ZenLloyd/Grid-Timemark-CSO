@@ -795,7 +795,12 @@ enum EditorBottomTab {
 
 class GridScreen extends StatefulWidget {
   final bool autoOpenPicker;
-  const GridScreen({super.key, this.autoOpenPicker = false});
+  final List<XFile>? initialPhotos;
+  const GridScreen({
+    super.key,
+    this.autoOpenPicker = false,
+    this.initialPhotos,
+  });
 
   @override
   State<GridScreen> createState() => _GridScreenState();
@@ -814,7 +819,11 @@ class _GridScreenState extends State<GridScreen> {
   void initState() {
     super.initState();
     _loadGridSettings();
-    if (widget.autoOpenPicker && _photos.isEmpty) {
+    if (widget.initialPhotos != null && widget.initialPhotos!.isNotEmpty) {
+      _photos.addAll(widget.initialPhotos!.map((f) => GridPhotoEntry(file: f)));
+      _isPhotoPickerStage = false;
+      _activeSheetTab = EditorBottomTab.tataLetak;
+    } else if (widget.autoOpenPicker && _photos.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _pickImagesFromDevice();
       });
@@ -872,15 +881,39 @@ class _GridScreenState extends State<GridScreen> {
     return templates[_selectedTemplateIndex.clamp(0, templates.length - 1)];
   }
 
+  static int _calculateCacheWidth(int totalPhotos) {
+    if (totalPhotos <= 1) return 1080;
+    if (totalPhotos <= 4) return 720;
+    if (totalPhotos <= 9) return 540;
+    if (totalPhotos <= 18) return 400;
+    if (totalPhotos <= 32) return 300;
+    return 220;
+  }
+
   void _initLayoutWeightsIfNeeded(GridTemplateSpec template) {
+    bool needsInit = false;
     if (_layoutGroupWeights.length != template.groups.length) {
+      needsInit = true;
+    } else if (_layoutItemWeights.length != template.groups.length) {
+      needsInit = true;
+    } else {
+      for (int g = 0; g < template.groups.length; g++) {
+        if (_layoutItemWeights[g].length != template.groups[g].length) {
+          needsInit = true;
+          break;
+        }
+      }
+    }
+
+    if (needsInit) {
       _layoutGroupWeights = template.defaultGroupWeights != null
           ? List<double>.from(template.defaultGroupWeights!)
           : List<double>.filled(template.groups.length, 1.0);
       _layoutItemWeights = [];
       for (int g = 0; g < template.groups.length; g++) {
         if (template.defaultItemWeights != null &&
-            g < template.defaultItemWeights!.length) {
+            g < template.defaultItemWeights!.length &&
+            template.defaultItemWeights![g].length == template.groups[g].length) {
           _layoutItemWeights
               .add(List<double>.from(template.defaultItemWeights![g]));
         } else {
@@ -1538,6 +1571,9 @@ class _GridScreenState extends State<GridScreen> {
               child: FilledButton.icon(
                 onPressed: () {
                   setState(() {
+                    _selectedTemplateIndex = 0;
+                    _layoutGroupWeights = [];
+                    _layoutItemWeights = [];
                     _isPhotoPickerStage = false;
                     _activeSheetTab = EditorBottomTab.tataLetak;
                   });
@@ -2643,10 +2679,10 @@ class _GridScreenState extends State<GridScreen> {
             elevation: 14,
             borderRadius: BorderRadius.circular(12),
             child: Opacity(
-              opacity: 0.58,
+              opacity: 0.75,
               child: Container(
-                width: 98,
-                height: 98,
+                width: 96,
+                height: 96,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
@@ -2656,20 +2692,14 @@ class _GridScreenState extends State<GridScreen> {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(9.5),
-                  child: Transform.rotate(
-                    angle: entry.rotation,
-                    child: Transform.flip(
-                      flipX: entry.flipHorizontal,
-                      flipY: entry.flipVertical,
-                      child: RotatedBox(
-                        quarterTurns: entry.quarterTurns,
-                        child: Image.file(
-                          File(entry.file.path),
-                          fit: BoxFit.cover,
-                          cacheWidth: 240,
-                          filterQuality: FilterQuality.low,
-                        ),
-                      ),
+                  child: Image.file(
+                    File(entry.file.path),
+                    fit: BoxFit.cover,
+                    cacheWidth: 160,
+                    filterQuality: FilterQuality.low,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: Colors.grey.shade400,
+                      child: const Icon(Icons.image, color: Colors.white),
                     ),
                   ),
                 ),
@@ -2678,11 +2708,22 @@ class _GridScreenState extends State<GridScreen> {
           ),
           childWhenDragging: Opacity(
             opacity: 0.35,
-            child: _buildPartitionTileContent(
-              entry: entry,
-              index: photoIndex,
-              isSelected: isSelected,
-              isDropTarget: false,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(_cornerRadius),
+                border: Border.all(
+                  color: scheme.primary.withValues(alpha: 0.5),
+                  width: 2.0,
+                ),
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.swap_horiz_rounded,
+                  color: Colors.black45,
+                  size: 32,
+                ),
+              ),
             ),
           ),
           child: Stack(
@@ -3029,8 +3070,49 @@ class _GridScreenState extends State<GridScreen> {
                         quarterTurns: entry.quarterTurns,
                         child: Image.file(
                           File(entry.file.path),
-                          cacheWidth: _photos.length > 25 ? 540 : (_photos.length > 9 ? 960 : 1440),
+                          cacheWidth: _calculateCacheWidth(_photos.length),
                           filterQuality: FilterQuality.medium,
+                          frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                            if (wasSynchronouslyLoaded || frame != null) {
+                              return child;
+                            }
+                            return Container(
+                              color: Colors.grey.shade100,
+                              child: const Center(
+                                child: Icon(
+                                  Icons.photo_outlined,
+                                  color: Colors.black26,
+                                  size: 20,
+                                ),
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color: Colors.grey.shade200,
+                              child: Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.broken_image_rounded,
+                                      color: Colors.grey.shade400,
+                                      size: 26,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Foto ${index + 1}',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.grey.shade600,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ),

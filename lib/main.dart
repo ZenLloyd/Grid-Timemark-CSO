@@ -26,6 +26,10 @@ Future<void> main() async {
     debugPrint('Gagal mendeteksi kamera: ${e.code} - ${e.description}');
   }
 
+  // Optimasi ImageCache untuk menangani hingga 50 foto di kolase secara lancar tanpa OOM
+  PaintingBinding.instance.imageCache.maximumSize = 1000;
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 256 * 1024 * 1024; // 256 MB
+
   runApp(const GridTimeMarkApp());
 }
 

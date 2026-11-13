@@ -88,6 +88,14 @@ class _ChangelogDialogState extends State<ChangelogDialog> {
 
     const items = [
       _ChangelogItem(
+        title: 'Fix Bug Kolase Blank / Foto Hilang',
+        description: 'Optimasi memori rendering & sinkronisasi layout partisi sehingga foto selalu tampil utuh untuk berapa pun jumlah foto (1 s.d. 50 foto).',
+      ),
+      _ChangelogItem(
+        title: 'Performa Ringan & Bebas Out-of-Memory',
+        description: 'Manajemen memori cerdas mengurangi beban RAM hingga 90% saat memuat foto kamera resolusi tinggi.',
+      ),
+      _ChangelogItem(
         title: 'Loading Foto Instan',
         description: 'Buka hingga 50 foto dari Galeri HP langsung tampil tanpa lag atau freeze.',
       ),
@@ -159,7 +167,7 @@ class _ChangelogDialogState extends State<ChangelogDialog> {
                           ),
                         ),
                         Text(
-                          'Pembaruan Versi 1.0.2',
+                          'Pembaruan Versi 1.1.3',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
