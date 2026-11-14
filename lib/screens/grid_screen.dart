@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../services/app_settings_service.dart';
 import '../services/image_export_service.dart';
@@ -830,6 +832,29 @@ class _GridScreenState extends State<GridScreen> {
     }
   }
 
+  Future<File> _ensureReliableLocalFile(XFile xfile, int index) async {
+    try {
+      final path = xfile.path;
+      if (!path.startsWith('content://') && path.isNotEmpty) {
+        final f = File(path);
+        if (await f.exists() && (await f.length()) > 0) {
+          return f;
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final bytes = await xfile.readAsBytes();
+      final tempDir = await getTemporaryDirectory();
+      final target = File('${tempDir.path}/gtm_img_${DateTime.now().microsecondsSinceEpoch}_$index.jpg');
+      await target.writeAsBytes(bytes);
+      return target;
+    } catch (e) {
+      debugPrint('Failed to copy xfile: $e');
+      return File(xfile.path);
+    }
+  }
+
   Future<void> _loadGridSettings() async {
     final s = await AppSettingsService.loadGridSettings();
     if (!mounted) return;
@@ -1250,8 +1275,9 @@ class _GridScreenState extends State<GridScreen> {
         source: ImageSource.camera,
       );
       if (captured == null || !mounted) return;
+      final reliable = await _ensureReliableLocalFile(captured, _photos.length);
       setState(() {
-        _photos.add(GridPhotoEntry(file: captured));
+        _photos.add(GridPhotoEntry(file: XFile(reliable.path)));
         _selectedTemplateIndex = 0;
         _layoutGroupWeights = [];
         _layoutItemWeights = [];
@@ -1283,11 +1309,15 @@ class _GridScreenState extends State<GridScreen> {
       final remainingSlots = maxPhotos - _photos.length;
       final bool exceeded = picked.length > remainingSlots;
 
+      final List<GridPhotoEntry> newEntries = [];
+      for (int i = 0; i < picked.length && newEntries.length < remainingSlots; i++) {
+        final xfile = picked[i];
+        final reliable = await _ensureReliableLocalFile(xfile, _photos.length + newEntries.length);
+        newEntries.add(GridPhotoEntry(file: XFile(reliable.path)));
+      }
+
       setState(() {
-        final toAdd = picked.take(remainingSlots).map(
-              (xfile) => GridPhotoEntry(file: xfile),
-            );
-        _photos.addAll(toAdd);
+        _photos.addAll(newEntries);
         _selectedTemplateIndex = 0;
         _layoutGroupWeights = [];
         _layoutItemWeights = [];
@@ -1339,10 +1369,11 @@ class _GridScreenState extends State<GridScreen> {
     try {
       final XFile? picked = await _picker.pickImage(
         source: ImageSource.gallery,
-              );
+      );
       if (picked == null) return;
+      final reliable = await _ensureReliableLocalFile(picked, index);
       setState(() {
-        _photos[index].file = picked;
+        _photos[index].file = XFile(reliable.path);
         _photos[index].resetTransform();
       });
     } catch (e) {
@@ -1848,11 +1879,11 @@ class _GridScreenState extends State<GridScreen> {
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(12),
-                              child: Image.file(
-                                File(entry.file.path),
+                              child: _SafeGridImage(
+                                file: File(entry.file.path),
+                                targetCacheWidth: 320,
+                                photoIndex: index,
                                 fit: BoxFit.cover,
-                                cacheWidth: 320,
-                                filterQuality: FilterQuality.low,
                               ),
                             ),
                             Container(
@@ -3068,51 +3099,12 @@ class _GridScreenState extends State<GridScreen> {
                       flipY: entry.flipVertical,
                       child: RotatedBox(
                         quarterTurns: entry.quarterTurns,
-                        child: Image.file(
-                          File(entry.file.path),
-                          cacheWidth: _calculateCacheWidth(_photos.length),
-                          filterQuality: FilterQuality.medium,
-                          frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-                            if (wasSynchronouslyLoaded || frame != null) {
-                              return child;
-                            }
-                            return Container(
-                              color: Colors.grey.shade100,
-                              child: const Center(
-                                child: Icon(
-                                  Icons.photo_outlined,
-                                  color: Colors.black26,
-                                  size: 20,
-                                ),
-                              ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Colors.grey.shade200,
-                              child: Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.broken_image_rounded,
-                                      color: Colors.grey.shade400,
-                                      size: 26,
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Foto ${index + 1}',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.grey.shade600,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
+                        child: _SafeGridImage(
+                          file: File(entry.file.path),
+                          targetCacheWidth: _calculateCacheWidth(_photos.length),
+                          photoIndex: index,
+                          fit: entry.fitMode,
+                          onReplaceRequested: () => _replacePhotoAt(index),
                         ),
                       ),
                     ),
@@ -4648,5 +4640,167 @@ class _WireframeTemplatePainter extends CustomPainter {
   bool shouldRepaint(covariant _WireframeTemplatePainter oldDelegate) {
     return oldDelegate.template.id != template.id ||
         oldDelegate.color != color;
+  }
+}
+
+/// Widget gambar aman berlapis:
+/// 1. Coba decode Image.file dengan cacheWidth proporsional (hemat RAM)
+/// 2. Jika gagal Skia decode, fallback ke Image.file tanpa cacheWidth
+/// 3. Jika gagal akses file/content URI, fallback ke Image.memory dari bytes
+/// 4. Jika tetap gagal, tampilkan UI error yang rapi dan tombol Ganti Foto
+class _SafeGridImage extends StatefulWidget {
+  final File file;
+  final int targetCacheWidth;
+  final int photoIndex;
+  final BoxFit fit;
+  final VoidCallback? onReplaceRequested;
+
+  const _SafeGridImage({
+    required this.file,
+    required this.targetCacheWidth,
+    required this.photoIndex,
+    this.fit = BoxFit.cover,
+    this.onReplaceRequested,
+  });
+
+  @override
+  State<_SafeGridImage> createState() => _SafeGridImageState();
+}
+
+class _SafeGridImageState extends State<_SafeGridImage> {
+  bool _useCacheWidth = true;
+  bool _useMemoryFallback = false;
+  Uint8List? _memoryBytes;
+  bool _hasFatalError = false;
+
+  @override
+  void didUpdateWidget(covariant _SafeGridImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.file.path != widget.file.path) {
+      _useCacheWidth = true;
+      _useMemoryFallback = false;
+      _memoryBytes = null;
+      _hasFatalError = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_hasFatalError) {
+      return _buildErrorWidget();
+    }
+
+    if (_useMemoryFallback && _memoryBytes != null) {
+      return Image.memory(
+        _memoryBytes!,
+        fit: widget.fit,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (ctx, err, st) {
+          debugPrint('MemoryImage fallback failed for photo ${widget.photoIndex}: $err');
+          return _buildErrorWidget();
+        },
+      );
+    }
+
+    return Image.file(
+      widget.file,
+      cacheWidth: _useCacheWidth ? widget.targetCacheWidth : null,
+      fit: widget.fit,
+      filterQuality: FilterQuality.medium,
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        if (wasSynchronouslyLoaded || frame != null) {
+          return child;
+        }
+        return Container(
+          color: Colors.grey.shade100,
+          child: const Center(
+            child: Icon(Icons.photo_outlined, color: Colors.black26, size: 24),
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        debugPrint('Image.file failed for photo ${widget.photoIndex} (useCacheWidth: $_useCacheWidth): $error');
+        // Tahap 1: Coba tanpa cacheWidth jika Skia downsampling gagal
+        if (_useCacheWidth) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _useCacheWidth = false);
+          });
+          return _buildLoadingWidget();
+        }
+        // Tahap 2: Coba baca bytes langsung jika path file terkendala
+        if (!_useMemoryFallback) {
+          _tryReadMemoryFallback();
+          return _buildLoadingWidget();
+        }
+        return _buildErrorWidget();
+      },
+    );
+  }
+
+  Future<void> _tryReadMemoryFallback() async {
+    try {
+      if (await widget.file.exists()) {
+        final bytes = await widget.file.readAsBytes();
+        if (mounted && bytes.isNotEmpty) {
+          setState(() {
+            _memoryBytes = bytes;
+            _useMemoryFallback = true;
+          });
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('Fallback readAsBytes failed: $e');
+    }
+    if (mounted) {
+      setState(() => _hasFatalError = true);
+    }
+  }
+
+  Widget _buildLoadingWidget() {
+    return Container(
+      color: Colors.grey.shade100,
+      child: const Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorWidget() {
+    return Container(
+      color: Colors.grey.shade200,
+      alignment: Alignment.center,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.broken_image_rounded, color: Colors.grey.shade500, size: 32),
+            const SizedBox(height: 4),
+            Text(
+              'Foto ${widget.photoIndex + 1}',
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.bold),
+            ),
+            if (widget.onReplaceRequested != null) ...[
+              const SizedBox(height: 6),
+              GestureDetector(
+                onTap: widget.onReplaceRequested,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2563EB),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text('Ganti Foto', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }

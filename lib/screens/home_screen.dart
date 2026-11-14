@@ -31,7 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _checkAndShowChangelog() async {
-    const versionKey = '1_1_3';
+    const versionKey = '1_1_4';
     try {
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/hide_changelog_$versionKey.txt');
@@ -150,7 +150,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       showDialog(
                         context: context,
                         builder: (ctx) =>
-                            const ChangelogDialog(versionKey: '1_1_3'),
+                            const ChangelogDialog(versionKey: '1_1_4'),
                       );
                     },
                   ),

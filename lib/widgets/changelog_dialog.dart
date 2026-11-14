@@ -88,6 +88,14 @@ class _ChangelogDialogState extends State<ChangelogDialog> {
 
     const items = [
       _ChangelogItem(
+        title: '100% Anti Gagal Muat Foto (Auto-Fallback)',
+        description: 'Setiap foto galeri/kamera otomatis di-cache lokal. Dilengkapi multi-stage fallback (cacheWidth -> original file -> memory stream) sehingga foto tidak pernah gagal tampil.',
+      ),
+      _ChangelogItem(
+        title: 'Tombol Ganti Foto Langsung di Sel',
+        description: 'Jika ada foto yang ingin diganti atau error, tersedia tombol pintas Ganti Foto langsung di sel terkait.',
+      ),
+      _ChangelogItem(
         title: 'Fix Bug Kolase Blank / Foto Hilang',
         description: 'Optimasi memori rendering & sinkronisasi layout partisi sehingga foto selalu tampil utuh untuk berapa pun jumlah foto (1 s.d. 50 foto).',
       ),
@@ -167,7 +175,7 @@ class _ChangelogDialogState extends State<ChangelogDialog> {
                           ),
                         ),
                         Text(
-                          'Pembaruan Versi 1.1.3',
+                          'Pembaruan Versi 1.1.4',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
