@@ -5,7 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:grid_and_timemark/screens/grid_screen.dart';
 
 void main() {
-  testWidgets('Test GridScreen collage editor stage with 11 photos', (tester) async {
+  testWidgets('Test GridScreen collage editor stage with 11 photos and text resize pentil', (tester) async {
     final tempDir = Directory.systemTemp.createTempSync();
     final sampleFile = File('${tempDir.path}/sample.png');
     sampleFile.writeAsBytesSync([
@@ -16,7 +16,7 @@ void main() {
       0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
       0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
       0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-      0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+      0x00, 0x00, 0x00, 0x49, 0x45, 0x44, 0x44, 0xAE,
       0x42, 0x60, 0x82,
     ]);
 
@@ -34,12 +34,37 @@ void main() {
       ),
     );
 
-    // Wait for async _initInitialPhotos to complete
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
 
     // Verify 11 photos in editor
     expect(find.text('11 Foto'), findsOneWidget);
-    print('Rendered 11 images successfully!');
+
+    // Scroll to and tap 'Teks' tab in the bottom sheet header
+    final teksTab = find.text('Teks');
+    await tester.ensureVisible(teksTab);
+    await tester.tap(teksTab);
+    await tester.pumpAndSettle();
+
+    // Close the initial 'Edit Teks Kolase' dialog by tapping 'Simpan'
+    final simpanBtn = find.text('Simpan');
+    if (simpanBtn.evaluate().isNotEmpty) {
+      await tester.tap(simpanBtn);
+      await tester.pumpAndSettle();
+    }
+
+    // Verify the resize pentil handle appears on the canvas and is directly draggable
+    final resizePentil = find.byKey(const ValueKey('text_resize_handle_0'));
+    expect(resizePentil, findsOneWidget);
+
+    // Drag the pentil left/up to shrink text
+    await tester.drag(resizePentil, const Offset(-15, -15));
+    await tester.pumpAndSettle();
+
+    // Drag the pentil right/down to enlarge text
+    await tester.drag(resizePentil, const Offset(30, 30));
+    await tester.pumpAndSettle();
+
+    print('Rendered 11 images and verified text resize pentil successfully!');
   });
 }

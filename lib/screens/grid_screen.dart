@@ -141,10 +141,11 @@ class CollageTextOverlay {
   bool isNeon;
   double fontSize;
   double opacity;
+  double startFontSize = 22.0;
 
   CollageTextOverlay({
     required this.text,
-    this.position = const Offset(80, 120),
+    this.position = const Offset(24, 80),
     this.fontFamily = 'sans_bold',
     this.textColor = Colors.white,
     this.backgroundColor,
@@ -2198,9 +2199,10 @@ class _GridScreenState extends State<GridScreen> {
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
               onTap: () {
-                if (_selectedPhotoIndex != null) {
+                if (_selectedPhotoIndex != null || _selectedTextIndex != null) {
                   setState(() {
                     _selectedPhotoIndex = null;
+                    _selectedTextIndex = null;
                     _showContextualPhotoBar = false;
                     _activeGesturePhotoIndex = null;
                   });
@@ -2350,100 +2352,311 @@ class _GridScreenState extends State<GridScreen> {
                                 );
                               }),
 
-                              // 4. Lapisan Teks Overlay (Video 2: 01:14 - 02:04 "Tugas 1 pameran")
+                              // 4. Lapisan Teks Overlay (Video 2: 01:14 - 02:04 "Tugas 1 pameran") + Pentil Ubah Ukuran
                               ...List.generate(_textOverlays.length, (i) {
                                 final t = _textOverlays[i];
                                 final isTextSelected =
                                     !_isSaving && _selectedTextIndex == i;
                                 return Positioned(
-                                  left: t.position.dx,
-                                  top: t.position.dy,
-                                  child: GestureDetector(
-                                    onDoubleTap: () => _openTextEditDialog(t),
-                                    onTap: () {
-                                      setState(() {
-                                        _selectedTextIndex = i;
-                                        _textInputController.text = t.text;
-                                        _activeSheetTab = EditorBottomTab.teks;
-                                        _showContextualPhotoBar = false;
-                                      });
-                                    },
-                                    onPanUpdate: (details) {
-                                      setState(() {
-                                        t.position += details.delta;
-                                      });
-                                    },
-                                    child: Opacity(
-                                      opacity: t.opacity.clamp(0.1, 1.0),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 5,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: t.backgroundColor,
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          border: isTextSelected
-                                              ? Border.all(
-                                                  color: Colors.white,
-                                                  width: 1.5,
-                                                )
-                                              : null,
-                                          boxShadow: t.isNeon &&
-                                                  t.strokeColor != null
-                                              ? [
-                                                  BoxShadow(
-                                                    color: t.strokeColor!,
-                                                    blurRadius: 12,
-                                                    spreadRadius: 1,
-                                                  ),
-                                                ]
-                                              : null,
-                                        ),
-                                        child: Stack(
-                                          clipBehavior: Clip.none,
-                                          children: [
-                                            if (t.strokeColor != null)
-                                              Text(
-                                                t.text,
-                                                style: _getTextStyleForOverlay(
-                                                  t,
-                                                  foreground: Paint()
-                                                    ..style =
-                                                        PaintingStyle.stroke
-                                                    ..strokeWidth = 3
-                                                    ..color = t.strokeColor!,
-                                                ),
+                                  left: t.position.dx - 14,
+                                  top: t.position.dy - 14,
+                                  child: Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      // Area utama teks (dengan padding 14px agar pentil di keempat sudut 100% masuk area hit-test Stack)
+                                      Padding(
+                                        padding: const EdgeInsets.all(14),
+                                        child: GestureDetector(
+                                          behavior: HitTestBehavior.opaque,
+                                          onDoubleTap: () => _openTextEditDialog(t),
+                                          onTap: () {
+                                            setState(() {
+                                              _selectedTextIndex = i;
+                                              _textInputController.text = t.text;
+                                              _activeSheetTab = EditorBottomTab.teks;
+                                              _showContextualPhotoBar = false;
+                                              _selectedPhotoIndex = null;
+                                            });
+                                          },
+                                          onScaleStart: (details) {
+                                            setState(() {
+                                              _selectedTextIndex = i;
+                                              _textInputController.text = t.text;
+                                              _activeSheetTab = EditorBottomTab.teks;
+                                              _showContextualPhotoBar = false;
+                                              _selectedPhotoIndex = null;
+                                              t.startFontSize = t.fontSize;
+                                            });
+                                          },
+                                          onScaleUpdate: (details) {
+                                            setState(() {
+                                              t.position += details.focalPointDelta;
+                                              if (details.pointerCount >= 2 ||
+                                                  (details.scale - 1.0).abs() > 0.01) {
+                                                t.fontSize =
+                                                    (t.startFontSize * details.scale)
+                                                        .clamp(8.0, 96.0);
+                                              }
+                                            });
+                                          },
+                                          child: Opacity(
+                                            opacity: t.opacity.clamp(0.1, 1.0),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 5,
                                               ),
-                                            Text(
-                                              t.text,
-                                              style: _getTextStyleForOverlay(
-                                                t,
-                                                color: t.textColor,
-                                              ).copyWith(
-                                                shadows: t.hasShadow
-                                                    ? [
-                                                        Shadow(
-                                                          color: t.isNeon &&
-                                                                  t.strokeColor !=
-                                                                      null
-                                                              ? t.strokeColor!
-                                                              : Colors.black54,
-                                                          blurRadius: t.isNeon
-                                                              ? 14
-                                                              : 4,
-                                                          offset: const Offset(
-                                                              1, 1),
-                                                        ),
-                                                      ]
+                                              decoration: BoxDecoration(
+                                                color: t.backgroundColor,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                border: isTextSelected
+                                                    ? Border.all(
+                                                        color: const Color(0xFF2563EB),
+                                                        width: 2.0,
+                                                      )
                                                     : null,
+                                                boxShadow: [
+                                                  if (isTextSelected)
+                                                    const BoxShadow(
+                                                      color: Colors.white70,
+                                                      spreadRadius: 1.0,
+                                                      blurRadius: 0,
+                                                    ),
+                                                  if (t.isNeon &&
+                                                      t.strokeColor != null)
+                                                    BoxShadow(
+                                                      color: t.strokeColor!,
+                                                      blurRadius: 12,
+                                                      spreadRadius: 1,
+                                                    ),
+                                                ],
+                                              ),
+                                              child: Stack(
+                                                clipBehavior: Clip.none,
+                                                children: [
+                                                  if (t.strokeColor != null)
+                                                    Text(
+                                                      t.text,
+                                                      style: _getTextStyleForOverlay(
+                                                        t,
+                                                        foreground: Paint()
+                                                          ..style =
+                                                              PaintingStyle.stroke
+                                                          ..strokeWidth = 3
+                                                          ..color = t.strokeColor!,
+                                                      ),
+                                                    ),
+                                                  Text(
+                                                    t.text,
+                                                    style: _getTextStyleForOverlay(
+                                                      t,
+                                                      color: t.textColor,
+                                                    ).copyWith(
+                                                      shadows: t.hasShadow
+                                                          ? [
+                                                              Shadow(
+                                                                color: t.isNeon &&
+                                                                        t.strokeColor !=
+                                                                            null
+                                                                    ? t.strokeColor!
+                                                                    : Colors.black54,
+                                                                blurRadius: t.isNeon
+                                                                    ? 14
+                                                                    : 4,
+                                                                offset: const Offset(
+                                                                    1, 1),
+                                                              ),
+                                                            ]
+                                                          : null,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             ),
-                                          ],
+                                          ),
                                         ),
                                       ),
-                                    ),
+
+                                      // PENTIL KIRI ATAS: Tombol Hapus Teks (X)
+                                      if (isTextSelected)
+                                        Positioned(
+                                          top: 0,
+                                          left: 0,
+                                          child: GestureDetector(
+                                            behavior: HitTestBehavior.opaque,
+                                            onTap: () {
+                                              setState(() {
+                                                _textOverlays.removeAt(i);
+                                                _selectedTextIndex =
+                                                    _textOverlays.isNotEmpty
+                                                        ? 0
+                                                        : null;
+                                              });
+                                            },
+                                            child: Container(
+                                              width: 28,
+                                              height: 28,
+                                              alignment: Alignment.center,
+                                              child: Container(
+                                                width: 22,
+                                                height: 22,
+                                                decoration: BoxDecoration(
+                                                  color: Colors.redAccent,
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(
+                                                    color: Colors.white,
+                                                    width: 1.8,
+                                                  ),
+                                                  boxShadow: const [
+                                                    BoxShadow(
+                                                      color: Colors.black38,
+                                                      blurRadius: 4,
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: const Icon(
+                                                  Icons.close_rounded,
+                                                  size: 13,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+
+                                      // PENTIL KANAN ATAS: Tombol Edit Isi Teks
+                                      if (isTextSelected)
+                                        Positioned(
+                                          top: 0,
+                                          right: 0,
+                                          child: GestureDetector(
+                                            behavior: HitTestBehavior.opaque,
+                                            onTap: () => _openTextEditDialog(t),
+                                            child: Container(
+                                              width: 28,
+                                              height: 28,
+                                              alignment: Alignment.center,
+                                              child: Container(
+                                                width: 22,
+                                                height: 22,
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF1E293B),
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(
+                                                    color: Colors.white,
+                                                    width: 1.8,
+                                                  ),
+                                                  boxShadow: const [
+                                                    BoxShadow(
+                                                      color: Colors.black38,
+                                                      blurRadius: 4,
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: const Icon(
+                                                  Icons.edit_rounded,
+                                                  size: 12,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+
+                                      // PENTIL KIRI BAWAH: Titik Sudut Tarik Ukuran (Kiri-Bawah)
+                                      if (isTextSelected)
+                                        Positioned(
+                                          bottom: 0,
+                                          left: 0,
+                                          child: GestureDetector(
+                                            behavior: HitTestBehavior.opaque,
+                                            onPanUpdate: (details) {
+                                              final delta =
+                                                  (-details.delta.dx +
+                                                          details.delta.dy) *
+                                                      0.35;
+                                              setState(() {
+                                                t.fontSize = (t.fontSize + delta)
+                                                    .clamp(8.0, 96.0);
+                                              });
+                                            },
+                                            child: Container(
+                                              width: 30,
+                                              height: 30,
+                                              alignment: Alignment.center,
+                                              child: Container(
+                                                width: 14,
+                                                height: 14,
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white,
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(
+                                                    color: const Color(0xFF2563EB),
+                                                    width: 2.5,
+                                                  ),
+                                                  boxShadow: const [
+                                                    BoxShadow(
+                                                      color: Colors.black38,
+                                                      blurRadius: 4,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+
+                                      // PENTIL KANAN BAWAH UTAMA: Tarik untuk Perbesar / Perkecil Ukuran Tulisan
+                                      if (isTextSelected)
+                                        Positioned(
+                                          bottom: 0,
+                                          right: 0,
+                                          child: GestureDetector(
+                                            key: ValueKey('text_resize_handle_$i'),
+                                            behavior: HitTestBehavior.opaque,
+                                            onPanUpdate: (details) {
+                                              final delta =
+                                                  (details.delta.dx +
+                                                          details.delta.dy) *
+                                                      0.35;
+                                              setState(() {
+                                                t.fontSize = (t.fontSize + delta)
+                                                    .clamp(8.0, 96.0);
+                                              });
+                                            },
+                                            child: Container(
+                                              width: 32,
+                                              height: 32,
+                                              alignment: Alignment.center,
+                                              child: Container(
+                                                width: 26,
+                                                height: 26,
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF2563EB),
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(
+                                                    color: Colors.white,
+                                                    width: 2.0,
+                                                  ),
+                                                  boxShadow: const [
+                                                    BoxShadow(
+                                                      color: Colors.black45,
+                                                      blurRadius: 5,
+                                                      offset: Offset(0, 1),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: const Icon(
+                                                  Icons.open_in_full_rounded,
+                                                  size: 14,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                 );
                               }),
@@ -3027,6 +3240,7 @@ class _GridScreenState extends State<GridScreen> {
                     return;
                   }
                   _selectedPhotoIndex = index;
+                  _selectedTextIndex = null;
                   _showContextualPhotoBar = true;
                 });
               },
@@ -3035,6 +3249,7 @@ class _GridScreenState extends State<GridScreen> {
                 if (_selectedPhotoIndex != null && _selectedPhotoIndex != index) return;
                 setState(() {
                   _selectedPhotoIndex = index;
+                  _selectedTextIndex = null;
                   _showContextualPhotoBar = true;
                   final bool isModified = entry.scale != 1.0 ||
                       entry.rotation != 0.0 ||
@@ -3058,6 +3273,7 @@ class _GridScreenState extends State<GridScreen> {
                 setState(() {
                   _activeGesturePhotoIndex = index;
                   _selectedPhotoIndex = index;
+                  _selectedTextIndex = null;
                   _showContextualPhotoBar = true;
                 });
                 entry.startScale = entry.scale;
@@ -3443,6 +3659,8 @@ class _GridScreenState extends State<GridScreen> {
                   _activeSheetTab = tab;
                   if (tab == EditorBottomTab.teks) {
                     _addOrSelectTextOverlay();
+                  } else {
+                    _selectedTextIndex = null;
                   }
                 });
               },
@@ -3513,6 +3731,8 @@ class _GridScreenState extends State<GridScreen> {
                               _activeSheetTab = tab;
                               if (tab == EditorBottomTab.teks) {
                                 _addOrSelectTextOverlay();
+                              } else {
+                                _selectedTextIndex = null;
                               }
                             });
                           },
@@ -3548,7 +3768,10 @@ class _GridScreenState extends State<GridScreen> {
                   ),
                   IconButton(
                     tooltip: 'Selesai / Tutup Panel',
-                    onPressed: () => setState(() => _activeSheetTab = null),
+                    onPressed: () => setState(() {
+                      _activeSheetTab = null;
+                      _selectedTextIndex = null;
+                    }),
                     icon: const Icon(Icons.check_rounded, size: 22),
                   ),
                 ],
@@ -3884,7 +4107,7 @@ class _GridScreenState extends State<GridScreen> {
                   onPressed: () {
                     final t = CollageTextOverlay(
                       text: 'Teks ${_textOverlays.length + 1}',
-                      position: const Offset(90, 140),
+                      position: const Offset(36, 100),
                     );
                     setState(() {
                       _textOverlays.add(t);
@@ -4181,37 +4404,125 @@ class _GridScreenState extends State<GridScreen> {
     ColorScheme scheme,
     CollageTextOverlay activeText,
   ) {
-    // 0: Papan Ketik
+    // 0: Papan Ketik + Kontrol Cepat Ukuran Tulisan
     if (_textEditorSubTab == 0) {
-      return Center(
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _textInputController,
-                decoration: InputDecoration(
-                  labelText: 'Ketik teks di atas kolase',
-                  hintText: 'Contoh: Tugas 1 pameran',
-                  isDense: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _textInputController,
+                  decoration: InputDecoration(
+                    labelText: 'Ketik teks di atas kolase',
+                    hintText: 'Contoh: Tugas 1 pameran',
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
+                  onChanged: (val) {
+                    setState(() {
+                      activeText.text = val.isEmpty ? ' ' : val;
+                    });
+                  },
                 ),
-                onChanged: (val) {
+              ),
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                tooltip: 'Buka Dialog Edit Teks',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.edit_note_rounded),
+                onPressed: () => _openTextEditDialog(activeText),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              Icon(Icons.format_size_rounded,
+                  size: 16, color: scheme.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Text(
+                'Ukuran',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 6),
+              InkWell(
+                borderRadius: BorderRadius.circular(6),
+                onTap: () {
                   setState(() {
-                    activeText.text = val.isEmpty ? ' ' : val;
+                    activeText.fontSize =
+                        (activeText.fontSize - 2.0).clamp(8.0, 96.0);
                   });
                 },
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Icon(Icons.remove_rounded, size: 15),
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            IconButton.filledTonal(
-              tooltip: 'Buka Dialog Edit Teks',
-              icon: const Icon(Icons.edit_note_rounded),
-              onPressed: () => _openTextEditDialog(activeText),
-            ),
-          ],
-        ),
+              Expanded(
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 3.0,
+                    thumbShape:
+                        const RoundSliderThumbShape(enabledThumbRadius: 7.0),
+                    overlayShape:
+                        const RoundSliderOverlayShape(overlayRadius: 14.0),
+                  ),
+                  child: Slider(
+                    value: activeText.fontSize.clamp(8.0, 96.0),
+                    min: 8,
+                    max: 96,
+                    onChanged: (v) => setState(() => activeText.fontSize = v),
+                  ),
+                ),
+              ),
+              InkWell(
+                borderRadius: BorderRadius.circular(6),
+                onTap: () {
+                  setState(() {
+                    activeText.fontSize =
+                        (activeText.fontSize + 2.0).clamp(8.0, 96.0);
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Icon(Icons.add_rounded, size: 15),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 28,
+                child: Text(
+                  '${activeText.fontSize.round()}',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: scheme.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       );
     }
 
@@ -4290,9 +4601,9 @@ class _GridScreenState extends State<GridScreen> {
           _MarginSliderRow(
             icon: Icons.format_size_rounded,
             label: 'Ukuran',
-            value: activeText.fontSize,
-            min: 12,
-            max: 52,
+            value: activeText.fontSize.clamp(8.0, 96.0),
+            min: 8,
+            max: 96,
             onChanged: (v) => setState(() => activeText.fontSize = v),
           ),
         ],

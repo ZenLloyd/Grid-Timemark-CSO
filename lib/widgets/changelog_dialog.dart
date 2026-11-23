@@ -88,6 +88,10 @@ class _ChangelogDialogState extends State<ChangelogDialog> {
 
     const items = [
       _ChangelogItem(
+        title: 'Pentil Tarik Ukuran Teks (Resize Handle)',
+        description: 'Tarik pentil biru di sudut kotak teks, cubit 2 jari, atau gunakan slider di tab Ketik untuk memperbesar & memperkecil tulisan dengan mudah.',
+      ),
+      _ChangelogItem(
         title: '100% Anti Gagal Muat Foto (Auto-Fallback)',
         description: 'Setiap foto galeri/kamera otomatis di-cache lokal. Dilengkapi multi-stage fallback (cacheWidth -> original file -> memory stream) sehingga foto tidak pernah gagal tampil.',
       ),
@@ -175,7 +179,7 @@ class _ChangelogDialogState extends State<ChangelogDialog> {
                           ),
                         ),
                         Text(
-                          'Pembaruan Versi 1.1.4',
+                          'Pembaruan Versi 1.1.5',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
