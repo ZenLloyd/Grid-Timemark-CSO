@@ -227,10 +227,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const Spacer(flex: 1),
 
-              // Identitas Tim: CSO - TIM
+              // Identitas Tim: CSO - Gardener - TIM
               Center(
                 child: Text(
-                  'CSO - TIM',
+                  'CSO - Gardener - TIM',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
