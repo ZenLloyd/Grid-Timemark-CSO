@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'camera_stamp_screen.dart';
+import '../services/app_update_service.dart';
 import '../widgets/changelog_dialog.dart';
 import '../widgets/theme_toggle_button.dart';
+import '../widgets/update_dialog.dart';
 import 'grid_screen.dart';
 
 /// Android alpha: true (default). Build iOS v1.0.2: --dart-define=FOTOMARK_ENABLED=false
@@ -20,18 +22,77 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  bool _isCheckingUpdate = false;
+
   @override
   void initState() {
     super.initState();
     if (widget.autoShowChangelog) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _checkAndShowChangelog();
+        _checkUpdateAndChangelogOnStartup();
       });
     }
   }
 
+  Future<void> _checkUpdateAndChangelogOnStartup() async {
+    final updateInfo = await AppUpdateService.checkForUpdate();
+    if (!mounted) return;
+    if (updateInfo != null && updateInfo.isUpdateAvailable) {
+      await showDialog(
+        context: context,
+        barrierDismissible: !updateInfo.forceUpdate,
+        builder: (ctx) => UpdateDialog(updateInfo: updateInfo),
+      );
+      return;
+    }
+    await _checkAndShowChangelog();
+  }
+
+  Future<void> _manualCheckForUpdate() async {
+    if (_isCheckingUpdate) return;
+    setState(() => _isCheckingUpdate = true);
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Memeriksa pembaruan terbaru dari server...'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    final updateInfo = await AppUpdateService.checkForUpdate();
+    if (!mounted) return;
+    setState(() => _isCheckingUpdate = false);
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    if (updateInfo == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tidak dapat terhubung ke server update. Periksa koneksi internet.'),
+        ),
+      );
+      return;
+    }
+
+    if (updateInfo.isUpdateAvailable) {
+      showDialog(
+        context: context,
+        barrierDismissible: !updateInfo.forceUpdate,
+        builder: (ctx) => UpdateDialog(updateInfo: updateInfo),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Aplikasi sudah versi terbaru (v$kCurrentAppVersion)!',
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _checkAndShowChangelog() async {
-    const versionKey = '1_1_5';
+    const versionKey = '1_1_6';
     try {
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/hide_changelog_$versionKey.txt');
@@ -144,13 +205,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const Spacer(),
                   IconButton(
+                    icon: const Icon(Icons.system_update_alt_rounded),
+                    tooltip: 'Cek Update Aplikasi',
+                    onPressed: _isCheckingUpdate ? null : _manualCheckForUpdate,
+                  ),
+                  IconButton(
                     icon: const Icon(Icons.info_outline_rounded),
                     tooltip: 'Apa yang Baru?',
                     onPressed: () {
                       showDialog(
                         context: context,
                         builder: (ctx) =>
-                            const ChangelogDialog(versionKey: '1_1_5'),
+                            const ChangelogDialog(versionKey: '1_1_6'),
                       );
                     },
                   ),

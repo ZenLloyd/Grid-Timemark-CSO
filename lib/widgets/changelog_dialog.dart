@@ -88,6 +88,10 @@ class _ChangelogDialogState extends State<ChangelogDialog> {
 
     const items = [
       _ChangelogItem(
+        title: 'Sistem Auto-Update In-App (Gaya OBS Studio)',
+        description: 'Otomatis mendeteksi pembaruan saat aplikasi dibuka lengkap dengan rincian fitur baru, pilihan Update Sekarang (unduh & pasang langsung) atau Nanti Saja.',
+      ),
+      _ChangelogItem(
         title: 'Pentil Tarik Ukuran Teks (Resize Handle)',
         description: 'Tarik pentil biru di sudut kotak teks, cubit 2 jari, atau gunakan slider di tab Ketik untuk memperbesar & memperkecil tulisan dengan mudah.',
       ),
@@ -179,7 +183,7 @@ class _ChangelogDialogState extends State<ChangelogDialog> {
                           ),
                         ),
                         Text(
-                          'Pembaruan Versi 1.1.5',
+                          'Pembaruan Versi 1.1.6',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,

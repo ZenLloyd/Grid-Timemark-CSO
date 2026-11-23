@@ -48,6 +48,7 @@ app.*.map.json
 .widget_preview/
 
 *.apk
+!Grid_TimeMark_alpha.apk
 
 # Android build output
 android/build/
